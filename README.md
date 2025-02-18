@@ -113,6 +113,7 @@ Available settings:
 
 - Only works on Buildkite domains
 - Some pages are excluded (documentation, changelog, privacy policy, and terms)
+- Due to the way Buildkite uses pagination, only the first page of pipelines will be auto-suggested via the fuzzy search
 
 ## Contributing
 
