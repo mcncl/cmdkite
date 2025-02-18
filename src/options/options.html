@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Quick Launch Box Options</title>
+        <style>
+            body {
+                padding: 1rem;
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    sans-serif;
+            }
+            .form-group {
+                margin-bottom: 1rem;
+            }
+            label {
+                display: block;
+                margin-bottom: 0.5rem;
+                font-weight: 500;
+            }
+            input[type="text"] {
+                padding: 0.5rem;
+                font-size: 14px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                width: 100%;
+                max-width: 200px;
+            }
+            .help-text {
+                font-size: 12px;
+                color: #666;
+                margin-top: 0.25rem;
+            }
+            .saved-message {
+                color: #0f0;
+                font-size: 14px;
+                margin-top: 1rem;
+                opacity: 0;
+                transition: opacity 0.3s;
+            }
+            .saved-message.visible {
+                opacity: 1;
+            }
+            .note {
+                margin-top: 1rem;
+                padding: 0.75rem;
+                background: #f5f5f5;
+                border-radius: 4px;
+                font-size: 13px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="form-group">
+            <label for="triggerKey">Trigger Key</label>
+            <input
+                type="text"
+                id="triggerKey"
+                placeholder="e.g., : or /"
+                maxlength="1"
+            />
+            <div class="help-text">
+                Single character to trigger the command box. Leave empty to use
+                CMD/Ctrl+K instead.
+            </div>
+        </div>
+        <div class="note">
+            Note: Setting a trigger key will disable the CMD/Ctrl+K shortcut.
+            Clear the trigger key to re-enable CMD/Ctrl+K.
+        </div>
+        <div id="saved" class="saved-message">Settings saved!</div>
+        <script src="options.js"></script>
+    </body>
+</html>
