@@ -1,5 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import type { Pipeline, PipelineSuggestion } from "../../types";
+import { CommandManager } from "../../services/commandManager";
+import { CommandMatch } from "../../types";
 
 interface CommandBoxProps {
   onClose?: () => void;
@@ -15,6 +23,8 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   const [suggestions, setSuggestions] = useState<PipelineSuggestion[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [commandMatches, setCommandMatches] = useState<CommandMatch[]>([]);
+  const commandManager = useMemo(() => new CommandManager(), []);
 
   // Focus input when becoming visible
   useEffect(() => {
@@ -128,34 +138,56 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   }, []);
 
   // Update suggestions when input changes
+  // Update the useEffect for suggestions in CommandBox component
   useEffect(() => {
     if (!input.trim()) {
       setSuggestions([]);
+      setCommandMatches([]);
       return;
     }
 
-    const searchTerm = input.toLowerCase();
-    const matches = pipelines
-      .map((pipeline) => {
-        const nameScore = fuzzyMatch(pipeline.name, searchTerm) * 1.5;
-        const slugScore = fuzzyMatch(pipeline.slug, searchTerm);
-        const fullPathScore = fuzzyMatch(
-          `${pipeline.organization}/${pipeline.slug}`,
-          searchTerm,
-        );
+    // Check if input starts with '/'
+    if (input.startsWith("/")) {
+      // Extract the command without the '/'
+      const commandInput = input.slice(1);
+      const matches = commandManager.matchCommands(commandInput);
+      setCommandMatches(matches);
+      setSuggestions([]); // Clear pipeline suggestions when showing commands
+    } else {
+      // Regular command matching without '/' prefix
+      const matches = commandManager.matchCommands(input);
+      setCommandMatches(matches);
 
-        return {
-          pipeline,
-          score: Math.max(nameScore, slugScore, fullPathScore),
-        };
-      })
-      .filter((match) => match.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
+      // If no command matches, search pipelines
+      if (matches.length === 0) {
+        const searchTerm = input.toLowerCase();
+        const pipelineMatches = pipelines
+          .map((pipeline) => {
+            const nameScore = fuzzyMatch(pipeline.name, searchTerm) * 1.5;
+            const slugScore = fuzzyMatch(pipeline.slug, searchTerm);
+            const fullPathScore = fuzzyMatch(
+              `${pipeline.organization}/${pipeline.slug}`,
+              searchTerm,
+            );
 
-    setSuggestions(matches);
+            return {
+              pipeline,
+              score: Math.max(nameScore, slugScore, fullPathScore),
+            };
+          })
+          .filter((match) => match.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 5);
+
+        setSuggestions(pipelineMatches);
+      } else {
+        // Clear pipeline suggestions when showing commands
+        setSuggestions([]);
+      }
+    }
+
     setSelectedIndex(0);
-  }, [input, pipelines, fuzzyMatch]);
+  }, [input, pipelines, fuzzyMatch, commandManager]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -164,17 +196,44 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
       onClose?.();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelectedIndex((prev) =>
-        prev < suggestions.length - 1 ? prev + 1 : prev,
-      );
+
+      const totalResults = commandMatches.length + suggestions.length;
+      if (totalResults === 0) return;
+
+      setSelectedIndex((prev) => {
+        if (prev >= totalResults - 1) return prev;
+        return prev + 1;
+      });
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setSelectedIndex((prev) => (prev > 0 ? prev - 1 : 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (suggestions.length > 0 && selectedIndex >= 0) {
-        const { organization, slug } = suggestions[selectedIndex].pipeline;
-        window.location.href = `/${organization}/${slug}`;
+
+      // Handle commands
+      if (selectedIndex < commandMatches.length) {
+        const command = commandMatches[selectedIndex].command;
+        // Extract any input after the command name
+        const inputParts = input.split(" ");
+        const commandInput =
+          inputParts.length > 1 ? inputParts.slice(1).join(" ") : undefined;
+
+        commandManager.executeCommand(command, commandInput);
+        onClose?.();
+      }
+      // Handle pipelines
+      else if (suggestions.length > 0) {
+        const pipelineIndex = selectedIndex - commandMatches.length;
+        if (pipelineIndex >= 0 && pipelineIndex < suggestions.length) {
+          const { organization, slug } = suggestions[pipelineIndex].pipeline;
+          window.location.href = `https://buildkite.com/${organization}/${slug}`;
+        }
+      }
+    } else if (e.key === "/") {
+      // Special handling for the "/" key - if it's at the start, don't prevent default
+      if (input === "" || (e.target as HTMLInputElement).selectionStart === 0) {
+        // Allow the "/" character to be entered
+        return;
       }
     }
   };
@@ -212,6 +271,41 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
         />
+
+        {commandMatches.length > 0 && (
+          <div className="cmd-k-results">
+            <div className="cmd-k-results-section">
+              <div className="cmd-k-section-title">Commands</div>
+              {commandMatches.map(({ command }, index) => (
+                <div
+                  key={command.id}
+                  className={`cmd-k-command ${
+                    index === selectedIndex ? "selected" : ""
+                  }`}
+                  onClick={() => {
+                    // Extract any input after the command name
+                    const inputParts = input.split(" ");
+                    const commandInput =
+                      inputParts.length > 1
+                        ? inputParts.slice(1).join(" ")
+                        : undefined;
+
+                    commandManager.executeCommand(command, commandInput);
+                    onClose?.();
+                  }}
+                >
+                  <div className="cmd-k-command-header">
+                    <div className="cmd-k-command-name">{command.name}</div>
+                    <div className="cmd-k-command-id">/{command.id}</div>
+                  </div>
+                  <div className="cmd-k-command-description">
+                    {command.description}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Results list */}
         {suggestions.length > 0 && (

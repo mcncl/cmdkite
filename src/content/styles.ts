@@ -124,4 +124,63 @@ export const styles = `
   font-size: 13px !important;
   white-space: nowrap !important;
 }
+
+.cmd-k-section-title {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #666 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  padding: 8px 12px 4px !important;
+}
+
+.cmd-k-command {
+  padding: 8px 12px !important;
+  cursor: pointer !important;
+  border-radius: 4px !important;
+  margin-bottom: 4px !important;
+}
+
+.cmd-k-command:hover {
+  background: #f5f5f5 !important;
+}
+
+.cmd-k-command.selected {
+  background: #e6f2ff !important;
+}
+
+.cmd-k-command-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 4px !important;
+}
+
+.cmd-k-command-name {
+  font-weight: 500 !important;
+}
+
+.cmd-k-command-id {
+  font-size: 12px !important;
+  color: #666 !important;
+  font-family: monospace !important;
+}
+
+.cmd-k-command-description {
+  font-size: 14px !important;
+  color: #666 !important;
+}
+
+/* Results section divider */
+.cmd-k-results-section {
+  margin-bottom: 12px !important;
+}
+
+.cmd-k-results-section:not(:last-child)::after {
+  content: "" !important;
+  display: block !important;
+  height: 1px !important;
+  background: #eee !important;
+  margin: 8px 12px !important;
+}
 `;

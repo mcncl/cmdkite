@@ -1,17 +1,18 @@
 import { Command, CommandMatch } from "../types";
-import { pipelineCommands } from "../commands/pipeline";
+import { allCommands } from "../commands";
 
 export class CommandManager {
   private commands: Command[];
 
   constructor() {
-    this.commands = [...pipelineCommands];
+    this.commands = allCommands;
   }
 
   matchCommands(input: string): CommandMatch[] {
     const [command, ...args] = input.toLowerCase().trim().split(" ");
 
     return this.commands
+      .filter((cmd) => !cmd.isAvailable || cmd.isAvailable())
       .map((cmd) => ({
         command: cmd,
         score: this.calculateMatchScore(command, cmd),

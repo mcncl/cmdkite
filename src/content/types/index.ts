@@ -4,6 +4,7 @@ export interface Command {
   description: string;
   keywords: string[];
   execute: (input?: string) => void;
+  isAvailable?: () => boolean;
 }
 
 export interface CommandMatch {

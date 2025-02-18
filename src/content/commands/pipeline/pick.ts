@@ -1,4 +1,4 @@
-import { Command } from "../types";
+import { Command } from "../../types";
 
 interface Pipeline {
   organization: string;
@@ -10,9 +10,11 @@ interface Pipeline {
   speed?: string;
 }
 
-let cachedPipelines: Pipeline[] = [];
+// Export this so other commands can use it
+export let cachedPipelines: Pipeline[] = [];
 
-async function fetchPipelines(): Promise<Pipeline[]> {
+// Export this for use in other commands
+export async function fetchPipelines(): Promise<Pipeline[]> {
   // Get all pipeline elements using data-testid
   const pipelineElements = Array.from(
     document.querySelectorAll('[data-testid="pipeline"]'),
@@ -82,7 +84,8 @@ async function fetchPipelines(): Promise<Pipeline[]> {
   return pipelines;
 }
 
-function fuzzyMatch(text: string, search: string): number {
+// Export this for use in other commands
+export function fuzzyMatch(text: string, search: string): number {
   const textLower = text.toLowerCase();
   const searchLower = search.toLowerCase();
 
@@ -146,7 +149,7 @@ export const goToPipelineCommand: Command = {
 
     if (matchingPipelines.length > 0) {
       const bestMatch = matchingPipelines[0].pipeline;
-      window.location.href = `/${bestMatch.organization}/${bestMatch.slug}`;
+      window.location.href = `https://buildkite.com/${bestMatch.organization}/${bestMatch.slug}`;
     } else {
       // Fallback to direct navigation if no match found
       const parts = input.split("/");
@@ -158,9 +161,7 @@ export const goToPipelineCommand: Command = {
         pipelineSlug = parts[1];
       }
 
-      window.location.href = `/${org}/${pipelineSlug}`;
+      window.location.href = `https://buildkite.com/${org}/${pipelineSlug}`;
     }
   },
 };
-
-export const pipelineCommands: Command[] = [goToPipelineCommand];
