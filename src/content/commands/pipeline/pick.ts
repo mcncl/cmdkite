@@ -119,7 +119,7 @@ export const goToPipelineCommand: Command = {
   name: "Go to Pipeline",
   description:
     "Navigate to a specific pipeline (type to search available pipelines)",
-  keywords: ["pipeline", "goto", "open", "nav", "p"],
+  keywords: ["pipeline", "goto"],
   execute: async (input?: string) => {
     if (!input) return;
 

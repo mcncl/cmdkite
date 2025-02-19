@@ -5,7 +5,7 @@ export const switchOrgCommand: Command = {
   name: "Switch Organization",
   description:
     "Switch to a different Buildkite organization (type organization slug)",
-  keywords: ["organization", "switch", "change", "goto", "team"],
+  keywords: ["organization", "switch", "org"],
   isAvailable: (): boolean => {
     // This command is always available on Buildkite domains
     return window.location.hostname.includes("buildkite.com");

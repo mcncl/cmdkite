@@ -5,7 +5,7 @@ export const newPipelineCommand: Command = {
   id: "new-pipeline",
   name: "Create New Pipeline",
   description: "Navigate to the new pipeline creation page",
-  keywords: ["create", "new", "add", "pipeline", "setup"],
+  keywords: ["create", "new", "add", "pipeline"],
   execute: async (input?: string) => {
     let url = window.location.pathname;
     let orgSlug = getOrganization(url);
