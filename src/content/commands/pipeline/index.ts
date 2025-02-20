@@ -1,16 +1,16 @@
 import { Command } from "../../types";
 import { newPipelineCommand } from "./new";
 import { goToPipelineCommand } from "./pick";
+import { listPipelineCommand } from "./list";
 
 export const pipelineCommands: Command[] = [
   goToPipelineCommand,
   newPipelineCommand,
+  listPipelineCommand,
 ];
 
-// Export utility functions and individual commands for use in other modules
 export {
   goToPipelineCommand,
-  // Export utility functions from pick.ts
   cachedPipelines,
   fetchPipelines,
   fuzzyMatch,
