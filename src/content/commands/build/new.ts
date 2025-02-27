@@ -1,6 +1,5 @@
 import { Command } from "../../types";
-import { cachedPipelines, fetchPipelines } from "../pipeline";
-import { pipelineSearchService } from "../../services/pipelineSearchService";
+import { pipelineService } from "../../services/pipelineService";
 
 export const newBuildCommand: Command = {
   id: "new-build",
@@ -36,13 +35,11 @@ export const newBuildCommand: Command = {
 
     // If input is provided, try to find a matching pipeline
     // First ensure pipeline data is fetched
-    if (cachedPipelines.length === 0) {
-      await fetchPipelines();
-    }
+    await pipelineService.ensurePipelinesLoaded();
 
-    // Find matching pipeline using the provided input and our search service
+    // Find matching pipeline using the provided input and our service
     const searchTerm = input.toLowerCase();
-    const matchingPipelines = await pipelineSearchService.searchPipelines(
+    const matchingPipelines = await pipelineService.searchPipelines(
       searchTerm,
       5,
     );

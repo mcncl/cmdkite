@@ -1,6 +1,6 @@
 import { Pipeline } from "../types";
-import { cachedPipelines, fetchPipelines } from "../commands/pipeline";
 import { fuzzyMatch, enhancedFuzzySearch } from "../util/search";
+import { pipelineService } from "./pipelineService";
 
 export interface PipelineSearchResult {
   pipeline: Pipeline;
@@ -30,9 +30,9 @@ export class PipelineSearchService {
     }
 
     // Ensure pipelines are loaded if requested
-    if (ensureLoaded && cachedPipelines.length === 0) {
+    if (ensureLoaded && pipelineService.pipelines.length === 0) {
       try {
-        await fetchPipelines();
+        await pipelineService.fetchPipelines();
       } catch (error) {
         console.error("Error fetching pipelines:", error);
         return [];
@@ -40,7 +40,7 @@ export class PipelineSearchService {
     }
 
     // Still no pipelines after trying to load them
-    if (cachedPipelines.length === 0) {
+    if (pipelineService.pipelines.length === 0) {
       return [];
     }
 
@@ -53,7 +53,7 @@ export class PipelineSearchService {
     ];
 
     // Perform search using enhanced fuzzy search
-    return cachedPipelines
+    return pipelineService.pipelines
       .map((pipeline) => {
         // Create a combined field for full path
         const pipelineWithPath = {
@@ -89,11 +89,11 @@ export class PipelineSearchService {
     searchTerm: string,
     limit = 5,
   ): PipelineSearchResult[] {
-    if (!searchTerm.trim() || cachedPipelines.length === 0) {
+    if (!searchTerm.trim() || pipelineService.pipelines.length === 0) {
       return [];
     }
 
-    return cachedPipelines
+    return pipelineService.pipelines
       .map((pipeline) => {
         const nameScore = fuzzyMatch(pipeline.name, searchTerm) * 1.5;
         const slugScore = fuzzyMatch(pipeline.slug, searchTerm);

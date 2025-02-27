@@ -1,8 +1,8 @@
 import { pipelineSearchService } from "../pipelineSearchService";
-import * as pipelineModule from "../../commands/pipeline";
+import { Pipeline } from "../../types";
 
 // Sample test pipelines
-const testPipelines = [
+const testPipelines: Pipeline[] = [
   {
     name: "Frontend Service",
     slug: "frontend-service",
@@ -23,33 +23,31 @@ const testPipelines = [
   },
 ];
 
-// Create a mock for cachedPipelines
-let mockCachedPipelines: typeof testPipelines = [];
-
-// Mock the pipeline module
-jest.mock("../../commands/pipeline", () => {
+// Mock the pipelineService - needs to be after testPipelines definition
+jest.mock("../pipelineService", () => {
+  const mockPipelineService = {
+    fetchPipelines: jest.fn().mockResolvedValue([]),
+    pipelines: [],
+    clearCache: jest.fn(),
+    ensurePipelinesLoaded: jest.fn(),
+  };
   return {
-    // Use a getter for cachedPipelines to prevent direct assignment
-    get cachedPipelines() {
-      return mockCachedPipelines;
-    },
-    fetchPipelines: jest.fn(),
-    fuzzyMatch: jest.requireActual("../../util/search").fuzzyMatch,
+    pipelineService: mockPipelineService,
   };
 });
+
+// Import the mocked service after the mock is defined
+import { pipelineService } from "../pipelineService";
 
 describe("PipelineSearchService", () => {
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
 
-    // Set up test data by updating the mock array
-    mockCachedPipelines = [...testPipelines];
-
-    // Mock fetchPipelines to return test data
-    (pipelineModule.fetchPipelines as jest.Mock).mockResolvedValue(
-      testPipelines,
-    );
+    // Set up test mock behavior with the proper data
+    jest
+      .mocked(pipelineService.fetchPipelines)
+      .mockResolvedValue([...testPipelines]);
   });
 
   describe("searchPipelines", () => {
@@ -59,21 +57,33 @@ describe("PipelineSearchService", () => {
     });
 
     it("calls fetchPipelines if cache is empty", async () => {
-      // Empty the cache
-      mockCachedPipelines = [];
+      // Ensure pipelines array is empty to trigger the fetch
+      Object.defineProperty(pipelineService, "pipelines", {
+        get: jest.fn().mockReturnValue([]),
+      });
 
       await pipelineSearchService.searchPipelines("frontend");
 
-      expect(pipelineModule.fetchPipelines).toHaveBeenCalled();
+      expect(pipelineService.fetchPipelines).toHaveBeenCalled();
     });
 
     it("does not call fetchPipelines if cache is not empty", async () => {
+      // Mock that pipelines array has content
+      Object.defineProperty(pipelineService, "pipelines", {
+        get: jest.fn().mockReturnValue([...testPipelines]),
+      });
+
       await pipelineSearchService.searchPipelines("frontend");
 
-      expect(pipelineModule.fetchPipelines).not.toHaveBeenCalled();
+      expect(pipelineService.fetchPipelines).not.toHaveBeenCalled();
     });
 
     it("returns results sorted by score", async () => {
+      // Mock that pipelines array has content
+      Object.defineProperty(pipelineService, "pipelines", {
+        get: jest.fn().mockReturnValue([...testPipelines]),
+      });
+
       const results = await pipelineSearchService.searchPipelines("frontend");
 
       expect(results.length).toBeGreaterThan(0);
@@ -90,6 +100,11 @@ describe("PipelineSearchService", () => {
     });
 
     it("limits results to specified number", async () => {
+      // Mock that pipelines array has content
+      Object.defineProperty(pipelineService, "pipelines", {
+        get: jest.fn().mockReturnValue([...testPipelines]),
+      });
+
       const limit = 1;
       const results = await pipelineSearchService.searchPipelines(
         "service",
@@ -100,6 +115,11 @@ describe("PipelineSearchService", () => {
     });
 
     it("handles search across multiple fields", async () => {
+      // Mock that pipelines array has content
+      Object.defineProperty(pipelineService, "pipelines", {
+        get: jest.fn().mockReturnValue([...testPipelines]),
+      });
+
       // Test search in name
       const nameResults =
         await pipelineSearchService.searchPipelines("Frontend");
@@ -131,14 +151,21 @@ describe("PipelineSearchService", () => {
     });
 
     it("returns empty array if no pipelines in cache", () => {
-      // Empty the cache
-      mockCachedPipelines = [];
+      // Ensure pipelines array is empty
+      Object.defineProperty(pipelineService, "pipelines", {
+        get: jest.fn().mockReturnValue([]),
+      });
 
       const results = pipelineSearchService.simpleFuzzySearch("frontend");
       expect(results).toEqual([]);
     });
 
     it("returns results sorted by score", () => {
+      // Mock that pipelines array has content
+      Object.defineProperty(pipelineService, "pipelines", {
+        get: jest.fn().mockReturnValue([...testPipelines]),
+      });
+
       const results = pipelineSearchService.simpleFuzzySearch("frontend");
 
       expect(results.length).toBeGreaterThan(0);

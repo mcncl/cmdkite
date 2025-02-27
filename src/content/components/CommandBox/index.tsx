@@ -7,9 +7,8 @@ import React, {
 } from "react";
 import { CommandManager } from "../../services/commandManager";
 import { userPreferencesService } from "../../services/preferences";
-import { cachedPipelines, fetchPipelines } from "../../commands/pipeline";
-import { pipelineSearchService } from "../../services/pipelineSearchService";
-import { enhancedFuzzySearch } from "../../util/search";
+import { pipelineService } from "../../services/pipelineService";
+
 import type {
   Command,
   Pipeline,
@@ -167,48 +166,12 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
 
   // Enhanced pipeline search function with improved fuzzy matching
   const searchPipelines = useCallback(
-    (searchTerm: string, limit: number = 5) => {
-      if (!searchTerm.trim() || cachedPipelines.length === 0) {
-        return [];
-      }
-
-      // Define fields to search with weights
-      const searchFields = [
-        { key: "name" as keyof Pipeline, weight: 1.5 }, // Name has highest weight
-        { key: "slug" as keyof Pipeline, weight: 1.0 },
-        { key: "organization" as keyof Pipeline, weight: 0.7 },
-        { key: "description" as keyof Pipeline, weight: 0.5 },
-      ];
-
-      return cachedPipelines
-        .map((pipeline) => {
-          // Create a combined field for full path
-          const pipelineWithPath = {
-            ...pipeline,
-            fullPath: `${pipeline.organization}/${pipeline.slug}`,
-          };
-
-          // Use enhanced fuzzy search
-          const score = enhancedFuzzySearch(pipelineWithPath, searchTerm, [
-            ...searchFields,
-            { key: "fullPath" as keyof typeof pipelineWithPath, weight: 1.2 },
-          ]);
-
-          return {
-            pipeline,
-            score,
-          };
-        })
-        .filter((match) => match.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit);
+    async (searchTerm: string, limit: number = 5) => {
+      return pipelineService.searchPipelines(searchTerm, limit);
     },
-    [
-      /* removed fuzzyMatch dependency since it's imported directly */
-    ],
+    [],
   );
 
-  // Update suggestions/commands when input changes in main view - optimized
   // Update suggestions/commands when input changes in main view - optimized
   useEffect(() => {
     if (viewMode !== "main") return;
@@ -248,17 +211,9 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
       const matches = commandManagerRef.current.matchCommands(input);
       setCommandMatches(matches);
 
-      // Always search pipelines with non-empty input
-      if (cachedPipelines.length > 0) {
-        // Fetch pipelines on first search if we don't have any
-        if (cachedPipelines.length === 0) {
-          fetchPipelines().catch(console.error);
-          setPipelineSuggestions([]);
-        } else {
-          const pipelineMatches = await searchPipelines(input);
-          setPipelineSuggestions(pipelineMatches);
-        }
-      }
+      // Search for pipelines using the service
+      const pipelineMatches = await searchPipelines(input);
+      setPipelineSuggestions(pipelineMatches);
 
       // Reset selection index when results change
       setSelectedIndex(0);
@@ -276,28 +231,19 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
       !commandSubInput.trim() &&
       (activeCommand.id === "pipeline" || activeCommand.id === "new-build")
     ) {
-      // If we have pipelines, show some top ones as suggestions
-      if (cachedPipelines.length > 0) {
-        const recentPipelines = cachedPipelines
-          .slice(0, 5)
-          .map((pipeline) => ({ pipeline, score: 1 }));
-        setPipelineSuggestions(recentPipelines);
-      } else {
-        // Try to fetch pipelines if we don't have any
-        fetchPipelines()
-          .then(() => {
-            if (cachedPipelines.length > 0) {
-              const initialPipelines = cachedPipelines
-                .slice(0, 5)
-                .map((pipeline) => ({ pipeline, score: 1 }));
-              setPipelineSuggestions(initialPipelines);
-            }
-          })
-          .catch((error) => {
-            console.error("Failed to fetch pipelines:", error);
-            setPipelineSuggestions([]);
-          });
-      }
+      // Ensure pipelines are loaded
+      pipelineService
+        .ensurePipelinesLoaded()
+        .then(() => {
+          const pipelines = pipelineService.pipelines;
+          if (pipelines.length > 0) {
+            const recentPipelines = pipelines
+              .slice(0, 5)
+              .map((pipeline) => ({ pipeline, score: 1 }));
+            setPipelineSuggestions(recentPipelines);
+          }
+        })
+        .catch(console.error);
       return;
     }
 

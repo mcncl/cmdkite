@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { userPreferencesService } from "../services/preferences";
+import { pipelineService } from "../services/pipelineService";
 import { Pipeline } from "../types";
 import { PipelineItem } from "./pipelineItem";
-import { cachedPipelines, fetchPipelines } from "../commands/pipeline";
 
 interface RecentPipelinesSectionProps {
   selectedIndex: number;
@@ -26,9 +26,7 @@ export const RecentPipelinesSection: React.FC<RecentPipelinesSectionProps> = ({
         setLoading(true);
 
         // Make sure we have pipelines data
-        if (cachedPipelines.length === 0) {
-          await fetchPipelines();
-        }
+        await pipelineService.ensurePipelinesLoaded();
 
         // Get recent pipeline IDs
         const recentPipelineData =
@@ -41,9 +39,7 @@ export const RecentPipelinesSection: React.FC<RecentPipelinesSectionProps> = ({
           const [org, slug] = recent.pipelineId.split("/");
 
           // Try to find in cached pipelines first
-          let pipeline = cachedPipelines.find(
-            (p) => p.organization === org && p.slug === slug,
-          );
+          let pipeline = pipelineService.getPipeline(org, slug);
 
           // If not found, create a minimal pipeline object
           if (!pipeline) {
