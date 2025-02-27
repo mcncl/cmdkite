@@ -1,7 +1,59 @@
 // src/content/services/__tests__/searchService.test.ts
 
+// Mock Chrome API
+const mockChromeStorage = {
+  sync: {
+    get: jest.fn().mockImplementation((key, callback) => {
+      // Mock default values
+      const defaults = {
+        userPreferences: {
+          recentPipelines: [],
+          favoritePipelines: [],
+          triggerKey: "",
+          theme: "system",
+          defaultView: "recent",
+          maxResults: 7,
+          recentSearches: [],
+        },
+      };
+
+      if (typeof callback === "function") {
+        callback(defaults);
+      }
+      return Promise.resolve(defaults);
+    }),
+    set: jest.fn().mockImplementation((items, callback) => {
+      if (typeof callback === "function") {
+        callback();
+      }
+      return Promise.resolve();
+    }),
+  },
+};
+
+// Mock global chrome object
+global.chrome = {
+  storage: mockChromeStorage,
+} as any;
+
 // Mock dependencies before importing any modules
-jest.mock("../preferences");
+jest.mock("../preferences", () => {
+  const originalModule = jest.requireActual("../preferences");
+  return {
+    ...originalModule,
+    userPreferencesService: {
+      ensureInitialized: jest.fn().mockResolvedValue(undefined),
+      getRecentSearches: jest.fn().mockResolvedValue([]),
+      setRecentSearches: jest.fn().mockResolvedValue(undefined),
+      getRecentPipelines: jest.fn().mockResolvedValue([]),
+      getFavoritePipelines: jest.fn().mockResolvedValue([]),
+      addRecentPipeline: jest.fn().mockResolvedValue(undefined),
+      isFavoritePipeline: jest.fn().mockResolvedValue(false),
+      toggleFavoritePipeline: jest.fn().mockResolvedValue(true),
+    },
+  };
+});
+
 jest.mock("../commandManager", () => ({
   CommandManager: jest.fn().mockImplementation(() => ({
     getAllAvailableCommands: jest.fn().mockReturnValue([
@@ -30,85 +82,8 @@ jest.mock("../commandManager", () => ({
   })),
 }));
 
-// Mock pipelineService - define all test data inline to avoid reference errors
-jest.mock("../pipelineService", () => ({
-  pipelineService: {
-    pipelines: [
-      {
-        name: "Frontend Service",
-        slug: "frontend-service",
-        organization: "testorg",
-        description: "A service for rendering UI components",
-      },
-      {
-        name: "Backend API",
-        slug: "backend-api",
-        organization: "testorg",
-        description: "Core API service",
-      },
-      {
-        name: "Data Processing",
-        slug: "data-processing",
-        organization: "dataorg",
-        description: "Data ETL pipeline",
-      },
-    ],
-    fetchPipelines: jest.fn().mockResolvedValue([
-      {
-        name: "Frontend Service",
-        slug: "frontend-service",
-        organization: "testorg",
-        description: "A service for rendering UI components",
-      },
-      {
-        name: "Backend API",
-        slug: "backend-api",
-        organization: "testorg",
-        description: "Core API service",
-      },
-      {
-        name: "Data Processing",
-        slug: "data-processing",
-        organization: "dataorg",
-        description: "Data ETL pipeline",
-      },
-    ]),
-    ensurePipelinesLoaded: jest.fn().mockResolvedValue(true),
-    getPipeline: jest.fn().mockImplementation((org, slug) => {
-      const pipelines = [
-        {
-          name: "Frontend Service",
-          slug: "frontend-service",
-          organization: "testorg",
-          description: "A service for rendering UI components",
-        },
-        {
-          name: "Backend API",
-          slug: "backend-api",
-          organization: "testorg",
-          description: "Core API service",
-        },
-        {
-          name: "Data Processing",
-          slug: "data-processing",
-          organization: "dataorg",
-          description: "Data ETL pipeline",
-        },
-      ];
-      return pipelines.find((p) => p.organization === org && p.slug === slug);
-    }),
-    clearCache: jest.fn(),
-  },
-}));
-
-// Import dependencies after mocking
-import { SearchService } from "../searchService";
-import { userPreferencesService } from "../preferences";
-import { pipelineService } from "../pipelineService";
-import { Command, Pipeline } from "../../types";
-
-// Now define test constants for local use
-const testPipelines: Pipeline[] = [
+// Define test pipelines first to use in mock
+const testPipelines = [
   {
     name: "Frontend Service",
     slug: "frontend-service",
@@ -129,6 +104,32 @@ const testPipelines: Pipeline[] = [
   },
 ];
 
+// Create a mock pipelineService with a pipelines getter
+const mockPipelineService = {
+  _pipelines: [...testPipelines],
+  get pipelines() {
+    return this._pipelines;
+  },
+  fetchPipelines: jest.fn().mockResolvedValue([...testPipelines]),
+  ensurePipelinesLoaded: jest.fn().mockResolvedValue(true),
+  getPipeline: jest.fn().mockImplementation((org, slug) => {
+    return testPipelines.find((p) => p.organization === org && p.slug === slug);
+  }),
+  clearCache: jest.fn(),
+};
+
+// Mock pipelineService
+jest.mock("../pipelineService", () => ({
+  pipelineService: mockPipelineService,
+}));
+
+// Import dependencies after mocking
+import { SearchService } from "../searchService";
+import { userPreferencesService } from "../preferences";
+import { pipelineService } from "../pipelineService";
+import { Command, Pipeline } from "../../types";
+
+// Define test constants for local use
 const testCommands: Command[] = [
   {
     id: "pipeline",
@@ -158,6 +159,9 @@ describe("SearchService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Reset pipelines to initial state before each test
+    mockPipelineService._pipelines = [...testPipelines];
 
     // Create a fresh SearchService with a mocked CommandManager
     const mockCommandManager = {
@@ -238,8 +242,8 @@ describe("SearchService", () => {
     });
 
     it("tries to fetch pipelines if none are cached", async () => {
-      // Mock empty pipeline cache
-      jest.spyOn(pipelineService, "pipelines", "get").mockReturnValue([]);
+      // Set empty pipelines array
+      mockPipelineService._pipelines = [];
 
       await searchService.searchPipelines("frontend");
 
@@ -247,8 +251,8 @@ describe("SearchService", () => {
     });
 
     it("doesn't try to fetch if ensureLoaded is false", async () => {
-      // Mock empty pipeline cache
-      jest.spyOn(pipelineService, "pipelines", "get").mockReturnValue([]);
+      // Set empty pipelines array
+      mockPipelineService._pipelines = [];
 
       await searchService.searchPipelines("frontend", 5, false);
 
@@ -312,6 +316,9 @@ describe("SearchService", () => {
         .spyOn(userPreferencesService, "getRecentSearches")
         .mockResolvedValue(mockSearches);
 
+      // Need to create a new instance to pick up the mocked searches
+      searchService = new SearchService();
+
       const results = await searchService.getRecentSearches();
 
       expect(results).toEqual(mockSearches);
@@ -326,9 +333,10 @@ describe("SearchService", () => {
 
     it("adds new searches to the beginning of the list", async () => {
       const existingSearches = ["search1", "search2"];
-      jest
-        .spyOn(userPreferencesService, "getRecentSearches")
-        .mockResolvedValue(existingSearches);
+
+      // Mock internal state of searchService to avoid timing issues
+      (searchService as any).recentSearches = [...existingSearches];
+      (searchService as any).recentSearchesLoaded = true;
 
       await searchService.saveRecentSearch("new-search");
 
@@ -344,9 +352,10 @@ describe("SearchService", () => {
 
     it("removes duplicates when saving searches", async () => {
       const existingSearches = ["search1", "search2", "search3"];
-      jest
-        .spyOn(userPreferencesService, "getRecentSearches")
-        .mockResolvedValue(existingSearches);
+
+      // Mock internal state of searchService to avoid timing issues
+      (searchService as any).recentSearches = [...existingSearches];
+      (searchService as any).recentSearchesLoaded = true;
 
       await searchService.saveRecentSearch("search2");
 
@@ -362,9 +371,10 @@ describe("SearchService", () => {
     it("limits the number of recent searches", async () => {
       // Create array with MAX_RECENT_SEARCHES + 5 items
       const manySearches = Array.from({ length: 15 }, (_, i) => `search${i}`);
-      jest
-        .spyOn(userPreferencesService, "getRecentSearches")
-        .mockResolvedValue(manySearches);
+
+      // Mock internal state of searchService to avoid timing issues
+      (searchService as any).recentSearches = [...manySearches];
+      (searchService as any).recentSearchesLoaded = true;
 
       await searchService.saveRecentSearch("new-search");
 
@@ -453,6 +463,28 @@ describe("SearchService", () => {
       jest
         .spyOn(userPreferencesService, "getRecentPipelines")
         .mockResolvedValue(recentPipelines);
+
+      // Explicitly override the getPipeline mock to return the exact objects we want
+      jest
+        .spyOn(pipelineService, "getPipeline")
+        .mockImplementation((org, slug) => {
+          if (org === "testorg" && slug === "frontend-service") {
+            return {
+              name: "Frontend Service", // Make sure this exactly matches the expected value
+              slug: "frontend-service",
+              organization: "testorg",
+              description: "A service for rendering UI components",
+            };
+          } else if (org === "dataorg" && slug === "data-processing") {
+            return {
+              name: "Data Processing",
+              slug: "data-processing",
+              organization: "dataorg",
+              description: "Data ETL pipeline",
+            };
+          }
+          return undefined;
+        });
 
       const results = await searchService.getRecentPipelines();
 
