@@ -94,6 +94,78 @@ Access extension options by right-clicking the extension icon and selecting "Opt
 Available settings:
 - **Trigger Key**: Set a single character (e.g., `/` or `:`) to trigger the command box instead of using the keyboard shortcut
 
+## Testing
+
+The CMDKite extension uses Jest and React Testing Library for testing components and utility functions.
+
+## Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode (recommended during development)
+npm run test:watch
+
+# Run tests with coverage report
+npm run test:coverage
+```
+
+## Testing Structure
+
+The project follows a standard testing structure:
+
+- Unit tests for utility functions and services
+- Component tests using React Testing Library
+- Integration tests for key features
+
+Tests are organized alongside the components and utilities they test:
+
+```
+src/
+├── content/
+│   ├── components/
+│   │   ├── __tests__/          # Component tests
+│   │   │   └── pipelineItem.test.tsx
+│   │   └── pipelineItem.tsx
+│   ├── commands/
+│   │   ├── pipeline/
+│   │   │   ├── __tests__/      # Command tests
+│   │   │   │   └── fuzzyMatch.test.ts
+│   │   │   └── pick.ts
+│   ├── util/
+│   │   ├── __tests__/          # Utility tests
+│   │   │   └── helpers.test.ts
+│   │   └── helpers.ts
+└── test/
+    ├── mocks/                  # Shared mocks
+    │   └── chrome.ts
+    └── setup.ts                # Test configuration
+```
+
+## Chrome API Mocking
+
+Since the extension relies on Chrome APIs that aren't available in the test environment, we use Jest mocks to simulate these APIs. This allows us to test the extension's functionality without an actual Chrome browser environment.
+
+## Writing Tests
+
+When writing tests:
+
+1. For components:
+   - Test rendering
+   - Test user interactions
+   - Test state changes
+
+2. For utility functions:
+   - Test edge cases
+   - Test error handling
+   - Test typical usage
+
+3. For commands:
+   - Test availability conditions
+   - Test execution logic
+   - Mock any DOM or Chrome API dependencies
+
 ## Technical Details
 
 ### Technologies Used
