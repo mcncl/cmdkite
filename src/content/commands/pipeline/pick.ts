@@ -1,4 +1,6 @@
 import { Command } from "../../types";
+import { fuzzyMatch } from "../../util/search";
+import { pipelineSearchService } from "../../services/pipelineSearchService";
 
 interface Pipeline {
   organization: string;
@@ -84,35 +86,8 @@ export async function fetchPipelines(): Promise<Pipeline[]> {
   return pipelines;
 }
 
-// Export this for use in other commands
-export function fuzzyMatch(text: string, search: string): number {
-  const textLower = text.toLowerCase();
-  const searchLower = search.toLowerCase();
-
-  if (textLower === searchLower) return 100; // Exact match
-  if (textLower.includes(searchLower)) return 80; // Contains match
-
-  let score = 0;
-  let searchIndex = 0;
-  let consecutiveMatches = 0;
-
-  // Fuzzy matching with consecutive character bonus
-  for (
-    let i = 0;
-    i < textLower.length && searchIndex < searchLower.length;
-    i++
-  ) {
-    if (textLower[i] === searchLower[searchIndex]) {
-      score += 10 + consecutiveMatches;
-      consecutiveMatches++;
-      searchIndex++;
-    } else {
-      consecutiveMatches = 0;
-    }
-  }
-
-  return searchIndex === searchLower.length ? score : 0;
-}
+// Export the fuzzyMatch function from our search utility
+export { fuzzyMatch } from "../../util/search";
 
 export const goToPipelineCommand: Command = {
   id: "pipeline",
@@ -128,24 +103,12 @@ export const goToPipelineCommand: Command = {
       await fetchPipelines();
     }
 
-    // Search for matching pipelines with scoring
+    // Search for matching pipelines using our search service
     const searchTerm = input.toLowerCase();
-    const matchingPipelines = cachedPipelines
-      .map((pipeline) => {
-        const nameScore = fuzzyMatch(pipeline.name, searchTerm) * 1.5; // Higher weight for name matches
-        const slugScore = fuzzyMatch(pipeline.slug, searchTerm);
-        const fullPathScore = fuzzyMatch(
-          `${pipeline.organization}/${pipeline.slug}`,
-          searchTerm,
-        );
-
-        return {
-          pipeline,
-          score: Math.max(nameScore, slugScore, fullPathScore),
-        };
-      })
-      .filter((match) => match.score > 0)
-      .sort((a, b) => b.score - a.score);
+    const matchingPipelines = await pipelineSearchService.searchPipelines(
+      searchTerm,
+      5,
+    );
 
     if (matchingPipelines.length > 0) {
       const bestMatch = matchingPipelines[0].pipeline;

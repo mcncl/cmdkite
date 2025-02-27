@@ -1,5 +1,6 @@
 import { Command } from "../../types";
-import { cachedPipelines, fetchPipelines, fuzzyMatch } from "../pipeline";
+import { cachedPipelines, fetchPipelines } from "../pipeline";
+import { pipelineSearchService } from "../../services/pipelineSearchService";
 
 export const newBuildCommand: Command = {
   id: "new-build",
@@ -39,24 +40,12 @@ export const newBuildCommand: Command = {
       await fetchPipelines();
     }
 
-    // Find matching pipeline using the provided input
+    // Find matching pipeline using the provided input and our search service
     const searchTerm = input.toLowerCase();
-    const matchingPipelines = cachedPipelines
-      .map((pipeline) => {
-        const nameScore = fuzzyMatch(pipeline.name, searchTerm) * 1.5;
-        const slugScore = fuzzyMatch(pipeline.slug, searchTerm);
-        const fullPathScore = fuzzyMatch(
-          `${pipeline.organization}/${pipeline.slug}`,
-          searchTerm,
-        );
-
-        return {
-          pipeline,
-          score: Math.max(nameScore, slugScore, fullPathScore),
-        };
-      })
-      .filter((match) => match.score > 0)
-      .sort((a, b) => b.score - a.score);
+    const matchingPipelines = await pipelineSearchService.searchPipelines(
+      searchTerm,
+      5,
+    );
 
     if (matchingPipelines.length > 0) {
       const bestMatch = matchingPipelines[0].pipeline;
@@ -76,5 +65,3 @@ export const newBuildCommand: Command = {
     }
   },
 };
-
-export const newBuildCommands: Command[] = [newBuildCommand];

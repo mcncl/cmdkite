@@ -8,6 +8,8 @@ import React, {
 import { CommandManager } from "../../services/commandManager";
 import { userPreferencesService } from "../../services/preferences";
 import { cachedPipelines, fetchPipelines } from "../../commands/pipeline";
+import { pipelineSearchService } from "../../services/pipelineSearchService";
+import { enhancedFuzzySearch } from "../../util/search";
 import type {
   Command,
   Pipeline,
@@ -170,78 +172,43 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
         return [];
       }
 
-      const terms = searchTerm
-        .toLowerCase()
-        .split(/\s+/)
-        .filter((t) => t.length > 0);
+      // Define fields to search with weights
+      const searchFields = [
+        { key: "name" as keyof Pipeline, weight: 1.5 }, // Name has highest weight
+        { key: "slug" as keyof Pipeline, weight: 1.0 },
+        { key: "organization" as keyof Pipeline, weight: 0.7 },
+        { key: "description" as keyof Pipeline, weight: 0.5 },
+      ];
 
       return cachedPipelines
         .map((pipeline) => {
-          // Check multiple fields for matching
-          const nameLower = pipeline.name.toLowerCase();
-          const slugLower = pipeline.slug.toLowerCase();
-          const orgLower = pipeline.organization.toLowerCase();
-          const descLower = (pipeline.description || "").toLowerCase();
-          const fullPath = `${orgLower}/${slugLower}`;
+          // Create a combined field for full path
+          const pipelineWithPath = {
+            ...pipeline,
+            fullPath: `${pipeline.organization}/${pipeline.slug}`,
+          };
 
-          // Calculate scores for different matching strategies
-          let totalScore = 0;
-
-          // Exact matches (highest priority)
-          if (nameLower === searchTerm.toLowerCase()) totalScore += 100;
-          if (slugLower === searchTerm.toLowerCase()) totalScore += 90;
-          if (fullPath === searchTerm.toLowerCase()) totalScore += 80;
-
-          // Starting matches
-          if (nameLower.startsWith(searchTerm.toLowerCase())) totalScore += 70;
-          if (slugLower.startsWith(searchTerm.toLowerCase())) totalScore += 60;
-          if (fullPath.startsWith(searchTerm.toLowerCase())) totalScore += 50;
-
-          // Contains matches
-          if (nameLower.includes(searchTerm.toLowerCase())) totalScore += 40;
-          if (slugLower.includes(searchTerm.toLowerCase())) totalScore += 30;
-          if (fullPath.includes(searchTerm.toLowerCase())) totalScore += 25;
-          if (descLower.includes(searchTerm.toLowerCase())) totalScore += 20;
-
-          // Handle multi-term searches (e.g., "frontend deploy")
-          if (terms.length > 1) {
-            const matchedTerms = terms.filter(
-              (term) =>
-                nameLower.includes(term) ||
-                slugLower.includes(term) ||
-                fullPath.includes(term) ||
-                descLower.includes(term),
-            );
-
-            // Bonus for matching multiple terms
-            if (matchedTerms.length === terms.length) {
-              totalScore += 40; // Bonus for matching all terms
-            } else if (matchedTerms.length > 0) {
-              totalScore += 15 * matchedTerms.length; // Partial bonus
-            }
-          }
-
-          // Character-by-character fuzzy matching for lower but still relevant results
-          if (totalScore === 0) {
-            const nameScore = fuzzyMatch(pipeline.name, searchTerm) * 1.2;
-            const slugScore = fuzzyMatch(pipeline.slug, searchTerm);
-            const pathScore = fuzzyMatch(fullPath, searchTerm);
-
-            totalScore = Math.max(nameScore, slugScore, pathScore);
-          }
+          // Use enhanced fuzzy search
+          const score = enhancedFuzzySearch(pipelineWithPath, searchTerm, [
+            ...searchFields,
+            { key: "fullPath" as keyof typeof pipelineWithPath, weight: 1.2 },
+          ]);
 
           return {
             pipeline,
-            score: totalScore,
+            score,
           };
         })
         .filter((match) => match.score > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, limit);
     },
-    [fuzzyMatch],
+    [
+      /* removed fuzzyMatch dependency since it's imported directly */
+    ],
   );
 
+  // Update suggestions/commands when input changes in main view - optimized
   // Update suggestions/commands when input changes in main view - optimized
   useEffect(() => {
     if (viewMode !== "main") return;
@@ -260,7 +227,7 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     }
 
     // Debounce expensive search operations
-    const handler = setTimeout(() => {
+    const handler = setTimeout(async () => {
       // First check if it's a command search (starting with /)
       if (input.startsWith("/")) {
         const commandId = input.slice(1).trim();
@@ -288,7 +255,7 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
           fetchPipelines().catch(console.error);
           setPipelineSuggestions([]);
         } else {
-          const pipelineMatches = searchPipelines(input);
+          const pipelineMatches = await searchPipelines(input);
           setPipelineSuggestions(pipelineMatches);
         }
       }
@@ -335,9 +302,9 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     }
 
     // Debounce search operations
-    const handler = setTimeout(() => {
+    const handler = setTimeout(async () => {
       if (activeCommand.id === "pipeline" || activeCommand.id === "new-build") {
-        const matches = searchPipelines(commandSubInput, 7);
+        const matches = await searchPipelines(commandSubInput, 7);
         setPipelineSuggestions(matches);
 
         // Reset selection index when results change

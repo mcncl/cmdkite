@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot, Root } from "react-dom/client";
-import { CommandBox as CommandBoxComponent } from "./components/CommandBox";
-import { styles } from "./styles";
+import { CommandBox as CommandBoxComponent } from "../components/CommandBox";
+import { styles } from "../styles";
 
 // Extend Window interface to include our custom properties
 declare global {
