@@ -1,14 +1,12 @@
 import React, {
   useState,
   useEffect,
-  useRef,
   useCallback,
+  useRef,
   useMemo,
 } from "react";
-import { CommandManager } from "../../services/commandManager";
+import { SearchService, searchService } from "../../services/searchService";
 import { userPreferencesService } from "../../services/preferences";
-import { pipelineService } from "../../services/pipelineService";
-
 import type {
   Command,
   Pipeline,
@@ -41,7 +39,7 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
-  const commandManagerRef = useRef<CommandManager>(new CommandManager());
+  const searchServiceRef = useRef<SearchService>(new SearchService());
 
   // Only calculate the fuzzy match function once
   const fuzzyMatch = useMemo(() => {
@@ -100,7 +98,7 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   const executeCommand = useCallback(
     (command: Command, input?: string) => {
       if (!command) return;
-      commandManagerRef.current.executeCommand(command, input);
+      searchServiceRef.current.executeCommand(command, input);
       onClose?.();
     },
     [onClose],
@@ -167,7 +165,7 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   // Enhanced pipeline search function with improved fuzzy matching
   const searchPipelines = useCallback(
     async (searchTerm: string, limit: number = 5) => {
-      return pipelineService.searchPipelines(searchTerm, limit);
+      return searchService.searchPipelines(searchTerm, limit);
     },
     [],
   );
@@ -179,45 +177,24 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     // Always show commands when box first opens with empty input
     if (!input.trim()) {
       setPipelineSuggestions([]);
-      setCommandMatches(
-        commandManagerRef.current.getAllAvailableCommands().map((command) => ({
-          command,
-          score: 1,
-        })),
-      );
+      setCommandMatches(searchService.searchCommands(""));
       setSelectedIndex(0);
       return;
     }
 
     // Debounce expensive search operations
     const handler = setTimeout(async () => {
-      // First check if it's a command search (starting with /)
-      if (input.startsWith("/")) {
-        const commandId = input.slice(1).trim();
-        const directMatches = commandManagerRef.current
-          .getAllAvailableCommands()
-          .filter((cmd) => cmd.id === commandId)
-          .map((command) => ({ command, score: 100 }));
-
-        if (directMatches.length > 0) {
-          setCommandMatches(directMatches);
-          setPipelineSuggestions([]);
-          setSelectedIndex(0);
-          return;
-        }
-      }
-
-      // Get matching commands
-      const matches = commandManagerRef.current.matchCommands(input);
+      // Get matching commands using searchService
+      const matches = searchService.searchCommands(input);
       setCommandMatches(matches);
 
-      // Search for pipelines using the service
+      // Search for pipelines using the searchService
       const pipelineMatches = await searchPipelines(input);
       setPipelineSuggestions(pipelineMatches);
 
       // Reset selection index when results change
       setSelectedIndex(0);
-    }, 120); // Slightly longer debounce for better performance while typing
+    }, 120);
 
     return () => clearTimeout(handler);
   }, [input, viewMode, searchPipelines]);
@@ -231,16 +208,16 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
       !commandSubInput.trim() &&
       (activeCommand.id === "pipeline" || activeCommand.id === "new-build")
     ) {
-      // Ensure pipelines are loaded
-      pipelineService
-        .ensurePipelinesLoaded()
-        .then(() => {
-          const pipelines = pipelineService.pipelines;
+      // Get recent pipelines from searchService
+      searchService
+        .getRecentPipelines(5)
+        .then((pipelines) => {
           if (pipelines.length > 0) {
-            const recentPipelines = pipelines
-              .slice(0, 5)
-              .map((pipeline) => ({ pipeline, score: 1 }));
-            setPipelineSuggestions(recentPipelines);
+            const recentPipelineSuggestions = pipelines.map((pipeline) => ({
+              pipeline,
+              score: 1,
+            }));
+            setPipelineSuggestions(recentPipelineSuggestions);
           }
         })
         .catch(console.error);
@@ -416,6 +393,41 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
       handleBackToMain,
     ],
   );
+
+  const renderRecentSearches = async () => {
+    // Only show in main view with empty input
+    if (viewMode !== "main" || input.trim()) {
+      return null;
+    }
+
+    const recentSearches = await searchService.getRecentSearches();
+
+    if (recentSearches.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="cmd-k-results-section">
+        <div className="cmd-k-section-title">Recent Searches</div>
+        <div>
+          {recentSearches.slice(0, 5).map((search, index) => (
+            <div
+              key={`search-${index}`}
+              className="cmd-k-command"
+              onClick={() => {
+                setInput(search);
+              }}
+            >
+              <div className="cmd-k-command-name">
+                <span style={{ marginRight: "8px" }}>🔍</span>
+                {search}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   // Only render the component when it's visible
   if (!isVisible) return null;

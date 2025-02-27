@@ -7,6 +7,7 @@ interface UserPreferences {
   theme: "light" | "dark" | "system";
   defaultView: "recent" | "favorites" | "commands";
   maxResults: number;
+  recentSearches: string[]; // New field for recent searches
 }
 
 interface RecentPipeline {
@@ -21,7 +22,8 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   triggerKey: "",
   theme: "system",
   defaultView: "recent",
-  maxResults: 7
+  maxResults: 7,
+  recentSearches: [], // Default empty array
 };
 
 // Maximum number of recent pipelines to store
@@ -65,7 +67,7 @@ export class UserPreferencesService {
     if (this.initialized) {
       return;
     }
-    
+
     if (this.initPromise) {
       await this.initPromise;
     } else {
@@ -120,6 +122,24 @@ export class UserPreferencesService {
   public async clearRecentPipelines(): Promise<void> {
     await this.ensureInitialized();
     this.preferences.recentPipelines = [];
+    await this.savePreferences();
+  }
+
+  // Recent searches management - new methods
+  public async getRecentSearches(): Promise<string[]> {
+    await this.ensureInitialized();
+    return this.preferences.recentSearches || [];
+  }
+
+  public async setRecentSearches(searches: string[]): Promise<void> {
+    await this.ensureInitialized();
+    this.preferences.recentSearches = searches;
+    await this.savePreferences();
+  }
+
+  public async clearRecentSearches(): Promise<void> {
+    await this.ensureInitialized();
+    this.preferences.recentSearches = [];
     await this.savePreferences();
   }
 
@@ -184,7 +204,9 @@ export class UserPreferencesService {
     return this.preferences.theme;
   }
 
-  public async setDefaultView(view: "recent" | "favorites" | "commands"): Promise<void> {
+  public async setDefaultView(
+    view: "recent" | "favorites" | "commands",
+  ): Promise<void> {
     await this.ensureInitialized();
     this.preferences.defaultView = view;
     await this.savePreferences();
