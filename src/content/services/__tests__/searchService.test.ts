@@ -1,4 +1,4 @@
-import { searchService } from "../searchService";
+import { SearchService } from "../searchService";
 import { userPreferencesService } from "../preferences";
 import { pipelineService } from "../pipelineService";
 import { CommandManager } from "../commandManager";
@@ -56,18 +56,17 @@ const testPipelines: Pipeline[] = [
 ];
 
 describe("SearchService", () => {
+  let searchService: SearchService;
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Mock CommandManager
-    const mockedCommandManager = CommandManager as jest.MockedClass<
-      typeof CommandManager
-    >;
-    mockedCommandManager.prototype.getAllAvailableCommands = jest
-      .fn()
-      .mockReturnValue(testCommands);
+    // Create a fresh SearchService with a mocked CommandManager
+    const mockCommandManager = {
+      getAllAvailableCommands: () => testCommands,
+    } as any;
+    searchService = new SearchService(mockCommandManager);
 
-    // Mock PipelineService
+    // Rest of the mocking setup remains the same
     Object.defineProperty(pipelineService, "pipelines", {
       get: jest.fn().mockReturnValue(testPipelines),
     });

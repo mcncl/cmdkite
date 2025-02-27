@@ -18,9 +18,12 @@ export class SearchService {
   private recentSearches: string[] = [];
   private recentSearchesLoaded = false;
 
-  constructor(commandManager: CommandManager = new CommandManager()) {
-    this.commandManager = commandManager;
-    this.loadRecentSearches();
+  constructor(commandManager?: CommandManager) {
+    // Use dependency injection with a fallback
+    this.commandManager = commandManager || new CommandManager();
+
+    // Wrap initialization in a try-catch to prevent breaking tests
+    this.loadRecentSearches().catch(console.error);
   }
 
   /**
@@ -139,6 +142,25 @@ export class SearchService {
       }))
       .filter((match) => match.score > 0)
       .sort((a, b) => b.score - a.score);
+  }
+
+  /**
+   * Execute a specific command
+   *
+   * @param command The command to execute
+   * @param input Optional input parameters for the command
+   */
+  public executeCommand(command: Command, input?: string): void {
+    if (!command || typeof command.execute !== "function") {
+      console.error("Invalid command or missing execute method");
+      return;
+    }
+
+    try {
+      command.execute(input);
+    } catch (error) {
+      console.error("Error executing command:", error);
+    }
   }
 
   /**
