@@ -1,15 +1,24 @@
-import { SearchService } from "../searchService";
-import { userPreferencesService } from "../preferences";
-import { pipelineService } from "../pipelineService";
-import { CommandManager } from "../commandManager";
-import { Command, Pipeline } from "../../types";
+const testPipelines: Pipeline[] = [
+  {
+    name: "Frontend Service",
+    slug: "frontend-service",
+    organization: "testorg",
+    description: "A service for rendering UI components",
+  },
+  {
+    name: "Backend API",
+    slug: "backend-api",
+    organization: "testorg",
+    description: "Core API service",
+  },
+  {
+    name: "Data Processing",
+    slug: "data-processing",
+    organization: "dataorg",
+    description: "Data ETL pipeline",
+  },
+];
 
-// Mock dependencies
-jest.mock("../preferences");
-jest.mock("../pipelineService");
-jest.mock("../commandManager");
-
-// Sample test data
 const testCommands: Command[] = [
   {
     id: "pipeline",
@@ -34,26 +43,26 @@ const testCommands: Command[] = [
   },
 ];
 
-const testPipelines: Pipeline[] = [
-  {
-    name: "Frontend Service",
-    slug: "frontend-service",
-    organization: "testorg",
-    description: "A service for rendering UI components",
-  },
-  {
-    name: "Backend API",
-    slug: "backend-api",
-    organization: "testorg",
-    description: "Core API service",
-  },
-  {
-    name: "Data Processing",
-    slug: "data-processing",
-    organization: "dataorg",
-    description: "Data ETL pipeline",
-  },
-];
+import { SearchService } from "../searchService";
+import { userPreferencesService } from "../preferences";
+import { pipelineService } from "../pipelineService";
+import { Command, Pipeline } from "../../types";
+
+jest.mock("../preferences");
+jest.mock("../commandManager");
+
+jest.mock("../pipelineService", () => {
+  const originalModule = jest.requireActual("../pipelineService");
+  return {
+    ...originalModule,
+    pipelineService: {
+      ...originalModule.pipelineService,
+      get pipelines() {
+        return testPipelines;
+      },
+    },
+  };
+});
 
 describe("SearchService", () => {
   let searchService: SearchService;
