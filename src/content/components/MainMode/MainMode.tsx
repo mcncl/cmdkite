@@ -1,9 +1,14 @@
 import React, { useRef, useEffect } from "react";
-import { Command, Pipeline, CommandMatch, PipelineSuggestion } from "../types";
-import { CommandInput } from "./CommandInput";
-import { CommandResults } from "./CommandResults";
-import { PipelineResults } from "./PipelineResults";
-import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
+import {
+  Command,
+  Pipeline,
+  CommandMatch,
+  PipelineSuggestion,
+} from "../../types";
+import { CommandInput } from "../CommandInput";
+import { CommandResults } from "../CommandResults";
+import { PipelineResults } from "../PipelineResults";
+import { useKeyboardNavigation } from "../../hooks/useKeyboardNavigation";
 
 interface MainModeProps {
   commandMatches: CommandMatch[];

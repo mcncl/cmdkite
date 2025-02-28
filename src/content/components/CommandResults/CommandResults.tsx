@@ -1,5 +1,5 @@
 import React from "react";
-import { Command, CommandMatch } from "../types";
+import { Command, CommandMatch } from "../../types";
 
 interface CommandResultsProps {
   commands: CommandMatch[];

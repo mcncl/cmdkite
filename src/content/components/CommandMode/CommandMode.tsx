@@ -1,8 +1,8 @@
 import React, { useRef, useEffect } from "react";
-import { Command, Pipeline, PipelineSuggestion } from "../types";
-import { CommandInput } from "./CommandInput";
-import { PipelineResults } from "./PipelineResults";
-import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
+import { Command, Pipeline, PipelineSuggestion } from "../../types";
+import { CommandInput } from "../CommandInput";
+import { PipelineResults } from "../PipelineResults";
+import { useKeyboardNavigation } from "../../hooks/useKeyboardNavigation";
 
 interface CommandModeProps {
   command: Command;

@@ -1,5 +1,5 @@
 import React from "react";
-import { Pipeline, PipelineSuggestion } from "../types";
+import { Pipeline, PipelineSuggestion } from "../../types";
 
 interface PipelineResultsProps {
   pipelines: PipelineSuggestion[];
