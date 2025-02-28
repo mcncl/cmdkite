@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, RefObject } from "react";
 
 /**
- * Types for the section configuration and item structure
+ * Generic interface for keyboard navigation section configuration
  */
 export interface KeyboardNavigationSection<T> {
   id: string;
@@ -10,9 +10,12 @@ export interface KeyboardNavigationSection<T> {
   onItemSelect?: (item: T) => void;
 }
 
-export interface KeyboardNavigationConfig<T> {
-  sections: KeyboardNavigationSection<T>[];
-  onSelect?: (item: T, sectionId: string) => void;
+/**
+ * Configuration for the keyboard navigation hook
+ */
+export interface KeyboardNavigationConfig {
+  sections: KeyboardNavigationSection<any>[];
+  onSelect?: (item: any, sectionId: string) => void;
   onEscape?: () => void;
   onBackspace?: (isEmpty: boolean) => void;
   containerRef?: RefObject<HTMLElement>;
@@ -23,9 +26,12 @@ export interface KeyboardNavigationConfig<T> {
   customKeyHandlers?: Record<string, (e: React.KeyboardEvent) => boolean>;
 }
 
-export interface KeyboardNavigationResult<T> {
+/**
+ * Return value for the keyboard navigation hook
+ */
+export interface KeyboardNavigationResult {
   selectedIndex: number;
-  selectedItem: T | null;
+  selectedItem: any | null;
   selectedSectionId: string | null;
   getTotalItems: () => number;
   handleKeyDown: (e: React.KeyboardEvent) => boolean;
@@ -35,11 +41,11 @@ export interface KeyboardNavigationResult<T> {
 }
 
 /**
- * A hook to handle keyboard navigation across multiple sections of items
+ * A hook to handle keyboard navigation across multiple sections of items with different types
  */
-export function useKeyboardNavigation<T>(
-  config: KeyboardNavigationConfig<T>,
-): KeyboardNavigationResult<T> {
+export function useKeyboardNavigation(
+  config: KeyboardNavigationConfig,
+): KeyboardNavigationResult {
   // Initialize state
   const [selectedIndex, setSelectedIndex] = useState<number>(
     config.initialSelectedIndex || 0,
@@ -80,7 +86,7 @@ export function useKeyboardNavigation<T>(
     (
       index: number,
     ): {
-      item: T | null;
+      item: any | null;
       sectionId: string | null;
       localIndex: number;
     } => {

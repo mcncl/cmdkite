@@ -7,12 +7,8 @@ import type {
   Pipeline,
   CommandMatch,
   PipelineSuggestion,
+  CommandBoxProps,
 } from "../../types";
-
-interface CommandBoxProps {
-  onClose?: () => void;
-  isVisible?: boolean;
-}
 
 type ViewMode = "main" | "command";
 
@@ -35,7 +31,6 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   const commandInputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
-  const searchServiceRef = useRef<SearchService>(new SearchService());
 
   // Reset state when closing - this is important to avoid state pollution
   useEffect(() => {
@@ -60,7 +55,7 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   const executeCommand = useCallback(
     (command: Command, input?: string) => {
       if (!command) return;
-      searchServiceRef.current.executeCommand(command, input);
+      searchService.executeCommand(command, input);
       onClose?.();
     },
     [onClose],
@@ -208,41 +203,6 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     };
   }, [isVisible, onClose]);
 
-  const renderRecentSearches = async () => {
-    // Only show in main view with empty input
-    if (viewMode !== "main" || input.trim()) {
-      return null;
-    }
-
-    const recentSearches = await searchService.getRecentSearches();
-
-    if (recentSearches.length === 0) {
-      return null;
-    }
-
-    return (
-      <div className="cmd-k-results-section">
-        <div className="cmd-k-section-title">Recent Searches</div>
-        <div>
-          {recentSearches.slice(0, 5).map((search, index) => (
-            <div
-              key={`search-${index}`}
-              className="cmd-k-command"
-              onClick={() => {
-                setInput(search);
-              }}
-            >
-              <div className="cmd-k-command-name">
-                <span style={{ marginRight: "8px" }}>🔍</span>
-                {search}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   // Main view keyboard navigation configuration
   const mainViewKeyboardConfig = {
     sections: [
@@ -282,10 +242,12 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
         items: pipelineSuggestions.map((sugg) => sugg.pipeline),
         onItemSelect: (pipeline: Pipeline) => {
           setCommandSubInput(`${pipeline.organization}/${pipeline.slug}`);
-          executeCommand(
-            activeCommand as Command,
-            `${pipeline.organization}/${pipeline.slug}`,
-          );
+          if (activeCommand) {
+            executeCommand(
+              activeCommand,
+              `${pipeline.organization}/${pipeline.slug}`,
+            );
+          }
         },
       },
     ],
@@ -343,41 +305,42 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
                     Commands
                   </div>
                   <div role="listbox" aria-labelledby="commands-section">
-                    {commandMatches.map(({ command }, index) => (
-                      <div
-                        key={command.id}
-                        className={`cmd-k-command ${
-                          index === mainNavigation.selectedIndex
-                            ? "selected"
-                            : ""
-                        }`}
-                        onClick={() => {
-                          if (
-                            command.id === "pipeline" ||
-                            command.id === "new-build"
-                          ) {
-                            enterCommandMode(command);
-                          } else {
-                            executeCommand(
-                              command,
-                              input.split(" ").slice(1).join(" "),
-                            );
-                          }
-                        }}
-                        role="option"
-                        aria-selected={index === mainNavigation.selectedIndex}
-                      >
-                        <div className="cmd-k-command-header">
-                          <div className="cmd-k-command-name">
-                            {command.name}
+                    {commandMatches.map(({ command }, index) => {
+                      const isSelected = index === mainNavigation.selectedIndex;
+                      return (
+                        <div
+                          key={command.id}
+                          className={`cmd-k-command ${isSelected ? "selected" : ""}`}
+                          onClick={() => {
+                            if (
+                              command.id === "pipeline" ||
+                              command.id === "new-build"
+                            ) {
+                              enterCommandMode(command);
+                            } else {
+                              executeCommand(
+                                command,
+                                input.split(" ").slice(1).join(" "),
+                              );
+                            }
+                          }}
+                          role="option"
+                          aria-selected={isSelected}
+                        >
+                          <div className="cmd-k-command-header">
+                            <div className="cmd-k-command-name">
+                              {command.name}
+                            </div>
+                            <div className="cmd-k-command-id">
+                              /{command.id}
+                            </div>
                           </div>
-                          <div className="cmd-k-command-id">/{command.id}</div>
+                          <div className="cmd-k-command-description">
+                            {command.description}
+                          </div>
                         </div>
-                        <div className="cmd-k-command-description">
-                          {command.description}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -391,19 +354,15 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
                   <div role="listbox" aria-labelledby="pipelines-section">
                     {pipelineSuggestions.map(({ pipeline }, index) => {
                       const globalIndex = index + commandMatches.length;
+                      const isSelected =
+                        globalIndex === mainNavigation.selectedIndex;
                       return (
                         <div
                           key={`${pipeline.organization}/${pipeline.slug}`}
-                          className={`cmd-k-result ${
-                            globalIndex === mainNavigation.selectedIndex
-                              ? "selected"
-                              : ""
-                          }`}
+                          className={`cmd-k-result ${isSelected ? "selected" : ""}`}
                           onClick={() => handlePipelineSelect(pipeline)}
                           role="option"
-                          aria-selected={
-                            globalIndex === mainNavigation.selectedIndex
-                          }
+                          aria-selected={isSelected}
                         >
                           <div className="cmd-k-pipeline">
                             <div className="cmd-k-pipeline-info">
@@ -489,50 +448,50 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
                     role="listbox"
                     aria-labelledby="command-pipelines-section"
                   >
-                    {pipelineSuggestions.map(({ pipeline }, index) => (
-                      <div
-                        key={`${pipeline.organization}/${pipeline.slug}`}
-                        className={`cmd-k-result ${
-                          index === commandNavigation.selectedIndex
-                            ? "selected"
-                            : ""
-                        }`}
-                        onClick={() => {
-                          setCommandSubInput(
-                            `${pipeline.organization}/${pipeline.slug}`,
-                          );
-                          executeCommand(
-                            activeCommand,
-                            `${pipeline.organization}/${pipeline.slug}`,
-                          );
-                        }}
-                        role="option"
-                        aria-selected={
-                          index === commandNavigation.selectedIndex
-                        }
-                      >
-                        <div className="cmd-k-pipeline">
-                          <div className="cmd-k-pipeline-info">
-                            <div className="cmd-k-pipeline-name">
-                              {pipeline.emoji && (
-                                <span style={{ marginRight: "8px" }}>
-                                  {pipeline.emoji}
-                                </span>
-                              )}
-                              {pipeline.name}
-                            </div>
-                            {pipeline.description && (
-                              <div className="cmd-k-pipeline-description">
-                                {pipeline.description}
+                    {pipelineSuggestions.map(({ pipeline }, index) => {
+                      const isSelected =
+                        index === commandNavigation.selectedIndex;
+                      return (
+                        <div
+                          key={`${pipeline.organization}/${pipeline.slug}`}
+                          className={`cmd-k-result ${isSelected ? "selected" : ""}`}
+                          onClick={() => {
+                            setCommandSubInput(
+                              `${pipeline.organization}/${pipeline.slug}`,
+                            );
+                            if (activeCommand) {
+                              executeCommand(
+                                activeCommand,
+                                `${pipeline.organization}/${pipeline.slug}`,
+                              );
+                            }
+                          }}
+                          role="option"
+                          aria-selected={isSelected}
+                        >
+                          <div className="cmd-k-pipeline">
+                            <div className="cmd-k-pipeline-info">
+                              <div className="cmd-k-pipeline-name">
+                                {pipeline.emoji && (
+                                  <span style={{ marginRight: "8px" }}>
+                                    {pipeline.emoji}
+                                  </span>
+                                )}
+                                {pipeline.name}
                               </div>
-                            )}
-                            <div className="cmd-k-pipeline-org">
-                              {pipeline.organization}/{pipeline.slug}
+                              {pipeline.description && (
+                                <div className="cmd-k-pipeline-description">
+                                  {pipeline.description}
+                                </div>
+                              )}
+                              <div className="cmd-k-pipeline-org">
+                                {pipeline.organization}/{pipeline.slug}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
