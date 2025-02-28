@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { SearchService, searchService } from "../../services/searchService";
+import { searchService } from "../../services/searchService";
 import { userPreferencesService } from "../../services/preferences";
-import { useKeyboardNavigation } from "../../hooks/useKeyboardNavigation";
 import type {
   Command,
   Pipeline,
@@ -9,14 +8,20 @@ import type {
   PipelineSuggestion,
   CommandBoxProps,
 } from "../../types";
+import { MainMode } from "../MainMode";
+import { CommandMode } from "../CommandMode";
 
 type ViewMode = "main" | "command";
 
+/**
+ * CommandBox component that provides a command palette interface
+ * for quickly navigating through Buildkite pipelines and executing commands.
+ */
 export const CommandBox: React.FC<CommandBoxProps> = ({
   onClose,
   isVisible = false,
 }) => {
-  // State with stable defaults
+  // State
   const [input, setInput] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("main");
   const [activeCommand, setActiveCommand] = useState<Command | null>(null);
@@ -27,12 +32,10 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   const [commandMatches, setCommandMatches] = useState<CommandMatch[]>([]);
 
   // Refs
-  const inputRef = useRef<HTMLInputElement>(null);
-  const commandInputRef = useRef<HTMLInputElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Reset state when closing - this is important to avoid state pollution
+  // Reset state when closing
   useEffect(() => {
     if (!isVisible) {
       setInput("");
@@ -44,14 +47,7 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     }
   }, [isVisible]);
 
-  // Focus input when becoming visible
-  useEffect(() => {
-    if (isVisible && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isVisible]);
-
-  // Memoized handler for executing commands
+  // Memoized handlers
   const executeCommand = useCallback(
     (command: Command, input?: string) => {
       if (!command) return;
@@ -61,35 +57,18 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     [onClose],
   );
 
-  // Enter command mode
   const enterCommandMode = useCallback((command: Command) => {
     setActiveCommand(command);
     setViewMode("command");
     setCommandSubInput("");
-
-    // Use setTimeout to ensure DOM is updated before focusing
-    setTimeout(() => {
-      if (commandInputRef.current) {
-        commandInputRef.current.focus();
-      }
-    }, 10);
   }, []);
 
-  // Memoized handler for going back to main mode
   const handleBackToMain = useCallback(() => {
     setViewMode("main");
     setActiveCommand(null);
     setCommandSubInput("");
-
-    // Ensure main input gets focus when going back
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-      }
-    }, 10);
   }, []);
 
-  // Memoized handler for selecting pipelines
   const handlePipelineSelect = useCallback((pipeline: Pipeline) => {
     if (!pipeline) return;
 
@@ -102,7 +81,6 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     window.location.href = `https://buildkite.com/${pipeline.organization}/${pipeline.slug}`;
   }, []);
 
-  // Handler for input changes in main mode
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setInput(e.target.value);
@@ -110,7 +88,6 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     [],
   );
 
-  // Handler for input changes in command mode
   const handleCommandSubInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setCommandSubInput(e.target.value);
@@ -118,7 +95,7 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     [],
   );
 
-  // Enhanced pipeline search function with improved fuzzy matching
+  // Enhanced pipeline search function
   const searchPipelines = useCallback(
     async (searchTerm: string, limit: number = 5) => {
       return searchService.searchPipelines(searchTerm, limit);
@@ -126,7 +103,7 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     [],
   );
 
-  // Update suggestions/commands when input changes in main view - optimized
+  // Update suggestions/commands when input changes in main view
   useEffect(() => {
     if (viewMode !== "main") return;
 
@@ -151,7 +128,7 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     return () => clearTimeout(handler);
   }, [input, viewMode, searchPipelines]);
 
-  // Update pipeline suggestions in command mode - with improved search experience
+  // Update pipeline suggestions in command mode
   useEffect(() => {
     if (viewMode !== "command" || !activeCommand) return;
 
@@ -203,79 +180,16 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     };
   }, [isVisible, onClose]);
 
-  // Main view keyboard navigation configuration
-  const mainViewKeyboardConfig = {
-    sections: [
-      {
-        id: "commands",
-        items: commandMatches.map((match) => match.command),
-        onItemSelect: (command: Command) => {
-          if (command.id === "pipeline" || command.id === "new-build") {
-            enterCommandMode(command);
-          } else {
-            executeCommand(command, input.split(" ").slice(1).join(" "));
-          }
-        },
-      },
-      {
-        id: "pipelines",
-        items: pipelineSuggestions.map((sugg) => sugg.pipeline),
-        onItemSelect: handlePipelineSelect,
-      },
-    ],
-    onEscape: onClose,
-    onBackspace: (isEmpty: boolean) => {
-      if (isEmpty) {
-        onClose?.();
+  // Handle command selection
+  const handleCommandSelect = useCallback(
+    (command: Command) => {
+      if (command.id === "pipeline" || command.id === "new-build") {
+        enterCommandMode(command);
+      } else {
+        executeCommand(command, input.split(" ").slice(1).join(" "));
       }
     },
-    containerRef: resultsRef,
-    inputRef: inputRef,
-    shouldScrollToSelected: true,
-  };
-
-  // Command view keyboard navigation configuration
-  const commandViewKeyboardConfig = {
-    sections: [
-      {
-        id: "suggestions",
-        items: pipelineSuggestions.map((sugg) => sugg.pipeline),
-        onItemSelect: (pipeline: Pipeline) => {
-          setCommandSubInput(`${pipeline.organization}/${pipeline.slug}`);
-          if (activeCommand) {
-            executeCommand(
-              activeCommand,
-              `${pipeline.organization}/${pipeline.slug}`,
-            );
-          }
-        },
-      },
-    ],
-    onEscape: handleBackToMain,
-    onBackspace: (isEmpty: boolean) => {
-      if (isEmpty) {
-        handleBackToMain();
-      }
-    },
-    containerRef: resultsRef,
-    inputRef: commandInputRef,
-    shouldScrollToSelected: true,
-  };
-
-  // Initialize keyboard navigation hooks for both view modes
-  const mainNavigation = useKeyboardNavigation(mainViewKeyboardConfig);
-  const commandNavigation = useKeyboardNavigation(commandViewKeyboardConfig);
-
-  // Get the active keyboard navigation based on current view mode
-  const activeNavigation =
-    viewMode === "main" ? mainNavigation : commandNavigation;
-
-  // Main keyboard handler that delegates to the appropriate navigation hook
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      return activeNavigation.handleKeyDown(e);
-    },
-    [activeNavigation],
+    [enterCommandMode, executeCommand, input],
   );
 
   // Only render the component when it's visible
@@ -285,224 +199,29 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   return (
     <div className="cmd-k-wrapper visible">
       <div ref={boxRef} className="cmd-k-box">
-        {/* Main view */}
-        {viewMode === "main" && (
-          <>
-            <input
-              ref={inputRef}
-              className="cmd-k-input"
-              placeholder="Search commands and pipelines..."
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
+        {viewMode === "main" ? (
+          <MainMode
+            commandMatches={commandMatches}
+            pipelineSuggestions={pipelineSuggestions}
+            inputValue={input}
+            onInputChange={handleInputChange}
+            onCommandSelect={handleCommandSelect}
+            onPipelineSelect={handlePipelineSelect}
+            onClose={onClose || (() => {})}
+            resultsContainerRef={resultsRef}
+          />
+        ) : (
+          activeCommand && (
+            <CommandMode
+              command={activeCommand}
+              onBack={handleBackToMain}
+              onExecute={executeCommand}
+              inputValue={commandSubInput}
+              onInputChange={handleCommandSubInputChange}
+              pipelineSuggestions={pipelineSuggestions}
+              resultsContainerRef={resultsRef}
             />
-
-            <div ref={resultsRef} className="cmd-k-results">
-              {/* Commands section */}
-              {commandMatches.length > 0 && (
-                <div className="cmd-k-results-section">
-                  <div className="cmd-k-section-title" id="commands-section">
-                    Commands
-                  </div>
-                  <div role="listbox" aria-labelledby="commands-section">
-                    {commandMatches.map(({ command }, index) => {
-                      const isSelected = index === mainNavigation.selectedIndex;
-                      return (
-                        <div
-                          key={command.id}
-                          className={`cmd-k-command ${isSelected ? "selected" : ""}`}
-                          onClick={() => {
-                            if (
-                              command.id === "pipeline" ||
-                              command.id === "new-build"
-                            ) {
-                              enterCommandMode(command);
-                            } else {
-                              executeCommand(
-                                command,
-                                input.split(" ").slice(1).join(" "),
-                              );
-                            }
-                          }}
-                          role="option"
-                          aria-selected={isSelected}
-                        >
-                          <div className="cmd-k-command-header">
-                            <div className="cmd-k-command-name">
-                              {command.name}
-                            </div>
-                            <div className="cmd-k-command-id">
-                              /{command.id}
-                            </div>
-                          </div>
-                          <div className="cmd-k-command-description">
-                            {command.description}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Pipeline results */}
-              {pipelineSuggestions.length > 0 && (
-                <div className="cmd-k-results-section">
-                  <div className="cmd-k-section-title" id="pipelines-section">
-                    Pipelines
-                  </div>
-                  <div role="listbox" aria-labelledby="pipelines-section">
-                    {pipelineSuggestions.map(({ pipeline }, index) => {
-                      const globalIndex = index + commandMatches.length;
-                      const isSelected =
-                        globalIndex === mainNavigation.selectedIndex;
-                      return (
-                        <div
-                          key={`${pipeline.organization}/${pipeline.slug}`}
-                          className={`cmd-k-result ${isSelected ? "selected" : ""}`}
-                          onClick={() => handlePipelineSelect(pipeline)}
-                          role="option"
-                          aria-selected={isSelected}
-                        >
-                          <div className="cmd-k-pipeline">
-                            <div className="cmd-k-pipeline-info">
-                              <div className="cmd-k-pipeline-name">
-                                {pipeline.emoji && (
-                                  <span style={{ marginRight: "8px" }}>
-                                    {pipeline.emoji}
-                                  </span>
-                                )}
-                                {pipeline.name}
-                              </div>
-                              {pipeline.description && (
-                                <div className="cmd-k-pipeline-description">
-                                  {pipeline.description}
-                                </div>
-                              )}
-                              <div className="cmd-k-pipeline-org">
-                                {pipeline.organization}/{pipeline.slug}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Empty state */}
-              {input &&
-                !commandMatches.length &&
-                !pipelineSuggestions.length && (
-                  <div className="cmd-k-empty-state">
-                    No matching results found
-                  </div>
-                )}
-            </div>
-          </>
-        )}
-
-        {/* Command input view (second step) */}
-        {viewMode === "command" && activeCommand && (
-          <>
-            <div className="cmd-k-command-header-bar">
-              <div className="cmd-k-command-title">
-                <span className="cmd-k-command-name">{activeCommand.name}</span>
-                <button
-                  className="cmd-k-back-button"
-                  onClick={handleBackToMain}
-                  aria-label="Back to main menu"
-                >
-                  ← Back
-                </button>
-              </div>
-            </div>
-
-            <input
-              ref={commandInputRef}
-              className="cmd-k-input cmd-k-command-input"
-              placeholder={
-                activeCommand.id === "pipeline"
-                  ? "Search pipelines..."
-                  : activeCommand.id === "new-build"
-                    ? "Search pipelines to create a build..."
-                    : "Enter parameters..."
-              }
-              value={commandSubInput}
-              onChange={handleCommandSubInputChange}
-              onKeyDown={handleKeyDown}
-            />
-
-            {/* Pipeline results for command mode */}
-            {pipelineSuggestions.length > 0 && (
-              <div ref={resultsRef} className="cmd-k-results">
-                <div className="cmd-k-results-section">
-                  <div
-                    id="command-pipelines-section"
-                    className="cmd-k-section-title"
-                  >
-                    Pipelines
-                  </div>
-                  <div
-                    role="listbox"
-                    aria-labelledby="command-pipelines-section"
-                  >
-                    {pipelineSuggestions.map(({ pipeline }, index) => {
-                      const isSelected =
-                        index === commandNavigation.selectedIndex;
-                      return (
-                        <div
-                          key={`${pipeline.organization}/${pipeline.slug}`}
-                          className={`cmd-k-result ${isSelected ? "selected" : ""}`}
-                          onClick={() => {
-                            setCommandSubInput(
-                              `${pipeline.organization}/${pipeline.slug}`,
-                            );
-                            if (activeCommand) {
-                              executeCommand(
-                                activeCommand,
-                                `${pipeline.organization}/${pipeline.slug}`,
-                              );
-                            }
-                          }}
-                          role="option"
-                          aria-selected={isSelected}
-                        >
-                          <div className="cmd-k-pipeline">
-                            <div className="cmd-k-pipeline-info">
-                              <div className="cmd-k-pipeline-name">
-                                {pipeline.emoji && (
-                                  <span style={{ marginRight: "8px" }}>
-                                    {pipeline.emoji}
-                                  </span>
-                                )}
-                                {pipeline.name}
-                              </div>
-                              {pipeline.description && (
-                                <div className="cmd-k-pipeline-description">
-                                  {pipeline.description}
-                                </div>
-                              )}
-                              <div className="cmd-k-pipeline-org">
-                                {pipeline.organization}/{pipeline.slug}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {commandSubInput && !pipelineSuggestions.length && (
-              <div className="cmd-k-empty-state">
-                No matching pipelines found
-              </div>
-            )}
-          </>
+          )
         )}
       </div>
     </div>
