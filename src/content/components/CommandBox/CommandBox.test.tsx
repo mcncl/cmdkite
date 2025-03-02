@@ -5,7 +5,7 @@ import { searchService } from "../../services/searchService";
 import { userPreferencesService } from "../../services/preferences";
 
 // Mock the keyboard navigation hook
-jest.mock("../../../hooks/useKeyboardNavigation", () => ({
+jest.mock("../../hooks", () => ({
   useKeyboardNavigation: () => ({
     selectedIndex: 0,
     selectedItem: null,
@@ -26,7 +26,7 @@ jest.mock("../../../hooks/useKeyboardNavigation", () => ({
 }));
 
 // Mock the search service
-jest.mock("../../../services/searchService", () => ({
+jest.mock("../../services/searchService", () => ({
   searchService: {
     searchCommands: jest.fn().mockReturnValue([
       {
@@ -67,7 +67,7 @@ jest.mock("../../../services/searchService", () => ({
 }));
 
 // Mock user preferences service
-jest.mock("../../../services/preferences", () => ({
+jest.mock("../../services/preferences", () => ({
   userPreferencesService: {
     addRecentPipeline: jest.fn().mockResolvedValue(undefined),
   },

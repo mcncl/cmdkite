@@ -4,7 +4,7 @@ import { CommandMode } from "../CommandMode";
 import { Command, PipelineSuggestion } from "../../types";
 
 // Mock the useKeyboardNavigation hook
-jest.mock("../../hook", () => ({
+jest.mock("../../hooks", () => ({
   useKeyboardNavigation: jest.fn(() => ({
     selectedIndex: 0,
     selectedItem: null,
