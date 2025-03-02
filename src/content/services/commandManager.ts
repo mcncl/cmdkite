@@ -1,18 +1,15 @@
 import { Command, CommandMatch } from "../types";
-import { allCommands } from "../commands";
+import { commandRegistry } from "./commandRegistry";
 
+/**
+ * Service for managing and searching commands.
+ */
 export class CommandManager {
-  private commands: Command[];
-
-  constructor() {
-    this.commands = allCommands;
-  }
-
   /**
    * Get all available commands (those that pass their isAvailable check)
    */
   public getAllAvailableCommands(): Command[] {
-    return this.commands.filter((cmd) => !cmd.isAvailable || cmd.isAvailable());
+    return commandRegistry.getAvailableCommands();
   }
 
   /**
@@ -34,15 +31,10 @@ export class CommandManager {
     // Check if using command ID direct reference (with slash)
     if (inputLower.startsWith("/")) {
       const commandId = inputLower.slice(1);
-      const directMatches = this.commands
-        .filter(
-          (cmd) =>
-            (!cmd.isAvailable || cmd.isAvailable()) && cmd.id === commandId,
-        )
-        .map((cmd) => ({ command: cmd, score: 100 }));
+      const command = commandRegistry.getCommand(commandId);
 
-      if (directMatches.length > 0) {
-        return directMatches;
+      if (command && (!command.isAvailable || command.isAvailable())) {
+        return [{ command, score: 100 }];
       }
     }
 
@@ -50,8 +42,7 @@ export class CommandManager {
     const words = inputLower.split(/\s+/);
     const firstWord = words[0];
 
-    return this.commands
-      .filter((cmd) => !cmd.isAvailable || cmd.isAvailable())
+    return this.getAllAvailableCommands()
       .map((cmd) => ({
         command: cmd,
         score: this.calculateMatchScore(inputLower, firstWord, words, cmd),
@@ -157,6 +148,9 @@ export class CommandManager {
    * Find a command by its ID
    */
   public getCommandById(id: string): Command | undefined {
-    return this.commands.find((cmd) => cmd.id === id);
+    return commandRegistry.getCommand(id);
   }
 }
+
+// Export singleton instance
+export const commandManager = new CommandManager();

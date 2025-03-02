@@ -1,1 +1,1 @@
-import { Command } from "../../types";
+// We will add user commands eventually; settings etc
