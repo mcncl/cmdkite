@@ -8,7 +8,7 @@ import {
 import { CommandInput } from "../CommandInput";
 import { CommandResults } from "../CommandResults";
 import { PipelineResults } from "../PipelineResults";
-import { useKeyboardNavigation } from "../../hooks/useKeyboardNavigation";
+import { useKeyboardNavigation } from "../../hooks";
 
 interface MainModeProps {
   commandMatches: CommandMatch[];

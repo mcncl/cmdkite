@@ -9,7 +9,7 @@ import {
 } from "../../types";
 
 // Mock the useKeyboardNavigation hook
-jest.mock("../../hooks/useKeyboardNavigation", () => ({
+jest.mock("../../hooks", () => ({
   useKeyboardNavigation: jest.fn(() => ({
     selectedIndex: 0,
     selectedItem: null,

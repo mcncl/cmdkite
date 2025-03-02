@@ -1,5 +1,5 @@
 import { renderHook, act } from "@testing-library/react";
-import { useKeyboardNavigation } from "./useKeyboardNavigation";
+import { useKeyboardNavigation } from "../useKeyboardNavigation";
 import { createRef } from "react";
 
 // Mock data for tests
