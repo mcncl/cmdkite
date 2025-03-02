@@ -18,16 +18,21 @@ module.exports = {
         use: "ts-loader",
         exclude: /node_modules/,
       },
+      {
+        test: /\.css$/,
+        use: ["style-loader", "css-loader"],
+      },
     ],
   },
   resolve: {
-    extensions: [".tsx", ".ts", ".js", ".jsx"],
+    extensions: [".tsx", ".ts", ".js", ".jsx", ".css"],
   },
   plugins: [
     new CopyPlugin({
       patterns: [
         { from: "src/manifest.json", to: "manifest.json" },
         { from: "src/options/options.html", to: "options.html" },
+        { from: "src/content/styles.css", to: "content/styles.css" },
       ],
     }),
   ],

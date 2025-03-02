@@ -1,8 +1,6 @@
 import React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { CommandBox as CommandBoxComponent } from "../components/CommandBox";
-import { styles } from "../styles";
-import { errorStyles } from "../styles/errorStyles";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ErrorProvider } from "../components/ErrorProvider";
 import { ThemeProvider } from "../components/ThemeProvider";
@@ -32,9 +30,6 @@ function cleanup(): void {
   // Remove existing elements
   document
     .querySelectorAll("#buildkite-command-box")
-    .forEach((el) => el.remove());
-  document
-    .querySelectorAll("#buildkite-command-styles")
     .forEach((el) => el.remove());
 
   // Cleanup React root
@@ -109,12 +104,6 @@ function initializeCommandBox(): void {
   try {
     // Cleanup any existing instances
     cleanup();
-
-    // Add styles
-    const styleElement = document.createElement("style");
-    styleElement.id = "buildkite-command-styles";
-    styleElement.textContent = styles + errorStyles;
-    document.head.appendChild(styleElement);
 
     // Create container
     const container = document.createElement("div");
