@@ -2,6 +2,14 @@ import React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { CommandBox as CommandBoxComponent } from "../components/CommandBox";
 import { styles } from "../styles";
+import { errorStyles } from "../styles/errorStyles";
+import { ErrorBoundary } from "../components/ErrorBoundary";
+import { ErrorProvider } from "../components/ErrorProvider";
+import {
+  errorService,
+  ErrorCategory,
+  ErrorSeverity,
+} from "../services/errorService";
 
 // Extend Window interface to include our custom properties
 declare global {
@@ -57,40 +65,78 @@ const CommandBoxContainer: React.FC = () => {
   }, []);
 
   return (
-    <CommandBoxComponent
-      isVisible={isVisible}
-      onClose={() => setIsVisible(false)}
-    />
+    <ErrorProvider>
+      <ErrorBoundary
+        errorCategory={ErrorCategory.UI}
+        fallback={
+          <div className="cmd-k-error-boundary">
+            <div className="cmd-k-error-message">
+              <div className="cmd-k-error-icon">⚠️</div>
+              <div className="cmd-k-error-content">
+                <h4>Command Box Error</h4>
+                <p>
+                  The command box encountered an error and couldn't be
+                  displayed.
+                </p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="cmd-k-error-retry"
+                >
+                  Refresh Page
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+      >
+        <CommandBoxComponent
+          isVisible={isVisible}
+          onClose={() => setIsVisible(false)}
+        />
+      </ErrorBoundary>
+    </ErrorProvider>
   );
 };
 
 function initializeCommandBox(): void {
-  // Cleanup any existing instances
-  cleanup();
+  try {
+    // Cleanup any existing instances
+    cleanup();
 
-  // Add styles
-  const styleElement = document.createElement("style");
-  styleElement.id = "buildkite-command-styles";
-  styleElement.textContent = styles;
-  document.head.appendChild(styleElement);
+    // Add styles
+    const styleElement = document.createElement("style");
+    styleElement.id = "buildkite-command-styles";
+    styleElement.textContent = styles + errorStyles;
+    document.head.appendChild(styleElement);
 
-  // Create container
-  const container = document.createElement("div");
-  container.id = "buildkite-command-box";
+    // Create container
+    const container = document.createElement("div");
+    container.id = "buildkite-command-box";
 
-  // Critical change: Don't add any CSS that would block interaction when inactive
-  document.body.appendChild(container);
+    // Critical change: Don't add any CSS that would block interaction when inactive
+    document.body.appendChild(container);
 
-  // Create React root and render
-  root = createRoot(container);
-  root.render(
-    <React.StrictMode>
-      <CommandBoxContainer />
-    </React.StrictMode>,
-  );
+    // Create React root and render
+    root = createRoot(container);
+    root.render(
+      <React.StrictMode>
+        <CommandBoxContainer />
+      </React.StrictMode>,
+    );
 
-  // Initialize port connection
-  connectToServiceWorker();
+    // Initialize port connection
+    connectToServiceWorker();
+  } catch (error) {
+    // Log initialization error
+    errorService.captureException(error, {
+      message: "Failed to initialize command box",
+      severity: ErrorSeverity.CRITICAL,
+      category: ErrorCategory.INITIALIZATION,
+    });
+
+    // Try to clean up after failed initialization
+    cleanup();
+  }
 }
 
 function connectToServiceWorker(): void {
@@ -110,6 +156,15 @@ function connectToServiceWorker(): void {
     port = chrome.runtime.connect({ name: "content-keepalive" });
 
     port.onDisconnect.addListener(() => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        errorService.logError(
+          `Port disconnected: ${error.message || "Unknown error"}`,
+          ErrorSeverity.WARNING,
+          ErrorCategory.INITIALIZATION,
+        );
+      }
+
       port = null;
       // Only attempt reconnect if we're not in cleanup
       if (root) {
@@ -120,6 +175,12 @@ function connectToServiceWorker(): void {
       }
     });
   } catch (error) {
+    errorService.captureException(error, {
+      message: "Failed to connect to service worker",
+      severity: ErrorSeverity.WARNING,
+      category: ErrorCategory.INITIALIZATION,
+    });
+
     // Only attempt reconnect if we're not in cleanup
     if (root) {
       portReconnectTimer = setTimeout(connectToServiceWorker, RECONNECT_DELAY);
@@ -142,24 +203,42 @@ chrome.runtime.onMessage.addListener(
   (
     request: { action: string },
     _sender,
-    sendResponse: (response: { success: boolean }) => void,
+    sendResponse: (response: { success: boolean; error?: string }) => void,
   ) => {
-    if (request.action === "toggle_command_box" && !isProcessingMessage) {
-      isProcessingMessage = true;
+    try {
+      if (request.action === "toggle_command_box" && !isProcessingMessage) {
+        isProcessingMessage = true;
 
-      // Ensure we have a working instance
-      if (!root) {
-        initializeCommandBox();
+        // Ensure we have a working instance
+        if (!root) {
+          initializeCommandBox();
+        }
+
+        window.toggleCommandBox();
+        sendResponse({ success: true });
+
+        // Reset the processing flag after a short delay
+        setTimeout(() => {
+          isProcessingMessage = false;
+        }, 100);
       }
+    } catch (error) {
+      errorService.captureException(error, {
+        message: "Error handling message",
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.INITIALIZATION,
+        context: { action: request.action },
+      });
 
-      window.toggleCommandBox();
-      sendResponse({ success: true });
+      // Send error response
+      sendResponse({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
 
-      // Reset the processing flag after a short delay
-      setTimeout(() => {
-        isProcessingMessage = false;
-      }, 100);
+      isProcessingMessage = false;
     }
+
     return true;
   },
 );
