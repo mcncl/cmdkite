@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { searchService } from "../../services/searchService";
 import { userPreferencesService } from "../../services/preferences";
+import { ThemeToggle } from "../ThemeToggle";
 import type {
   Command,
   Pipeline,
@@ -199,6 +200,18 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   return (
     <div className="cmd-k-wrapper visible">
       <div ref={boxRef} className="cmd-k-box">
+        {/* Header with theme toggle */}
+        <div
+          className="cmd-k-header"
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginBottom: "10px",
+          }}
+        >
+          <ThemeToggle showLabel={false} />
+        </div>
+
         {viewMode === "main" ? (
           <MainMode
             commandMatches={commandMatches}

@@ -5,11 +5,13 @@ import { styles } from "../styles";
 import { errorStyles } from "../styles/errorStyles";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ErrorProvider } from "../components/ErrorProvider";
+import { ThemeProvider } from "../components/ThemeProvider";
 import {
   errorService,
   ErrorCategory,
   ErrorSeverity,
 } from "../services/errorService";
+import { themeService } from "../services/themeService";
 
 // Extend Window interface to include our custom properties
 declare global {
@@ -52,6 +54,9 @@ function cleanup(): void {
     clearTimeout(portReconnectTimer);
     portReconnectTimer = null;
   }
+
+  // Clean up the theme service
+  themeService.dispose();
 }
 
 const CommandBoxContainer: React.FC = () => {
@@ -66,34 +71,36 @@ const CommandBoxContainer: React.FC = () => {
 
   return (
     <ErrorProvider>
-      <ErrorBoundary
-        errorCategory={ErrorCategory.UI}
-        fallback={
-          <div className="cmd-k-error-boundary">
-            <div className="cmd-k-error-message">
-              <div className="cmd-k-error-icon">⚠️</div>
-              <div className="cmd-k-error-content">
-                <h4>Command Box Error</h4>
-                <p>
-                  The command box encountered an error and couldn't be
-                  displayed.
-                </p>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="cmd-k-error-retry"
-                >
-                  Refresh Page
-                </button>
+      <ThemeProvider>
+        <ErrorBoundary
+          errorCategory={ErrorCategory.UI}
+          fallback={
+            <div className="cmd-k-error-boundary">
+              <div className="cmd-k-error-message">
+                <div className="cmd-k-error-icon">⚠️</div>
+                <div className="cmd-k-error-content">
+                  <h4>Command Box Error</h4>
+                  <p>
+                    The command box encountered an error and couldn't be
+                    displayed.
+                  </p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="cmd-k-error-retry"
+                  >
+                    Refresh Page
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        }
-      >
-        <CommandBoxComponent
-          isVisible={isVisible}
-          onClose={() => setIsVisible(false)}
-        />
-      </ErrorBoundary>
+          }
+        >
+          <CommandBoxComponent
+            isVisible={isVisible}
+            onClose={() => setIsVisible(false)}
+          />
+        </ErrorBoundary>
+      </ThemeProvider>
     </ErrorProvider>
   );
 };
@@ -123,6 +130,15 @@ function initializeCommandBox(): void {
         <CommandBoxContainer />
       </React.StrictMode>,
     );
+
+    // Initialize theme service
+    themeService.initialize().catch((error) => {
+      errorService.captureException(error, {
+        message: "Failed to initialize theme service",
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.INITIALIZATION,
+      });
+    });
 
     // Initialize port connection
     connectToServiceWorker();

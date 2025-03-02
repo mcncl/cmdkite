@@ -1,17 +1,12 @@
 export const styles = `
+  /* Command input specific styling */
   .cmd-k-input.cmd-k-command-input {
-    background: white !important;
-    border-color: #3b82f6 !important;
+    background: var(--cmd-k-bg-secondary) !important;
+    border-color: var(--cmd-k-accent-primary) !important;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
   }
 
-  @media (prefers-color-scheme: dark) {
-    .cmd-k-input.cmd-k-command-input {
-      background: #252525 !important;
-      border-color: #3b82f6 !important;
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3) !important;
-    }
-  }/* Container wrapper - completely invisible when not active */
+  /* Container wrapper - completely invisible when not active */
   .cmd-k-wrapper {
     position: fixed !important;
     top: 0 !important;
@@ -21,7 +16,7 @@ export const styles = `
     z-index: 999998 !important;
     pointer-events: none !important; /* Default to not capturing clicks */
     background-color: rgba(0, 0, 0, 0) !important; /* Start fully transparent */
-    transition: background-color 0.15s ease-in, visibility 0s 0.15s !important;
+    transition: background-color var(--cmd-k-animation-normal) ease-in, visibility 0s var(--cmd-k-animation-normal) !important;
     visibility: hidden !important; /* Hide completely when not visible */
     display: flex !important;
     align-items: flex-start !important;
@@ -33,8 +28,8 @@ export const styles = `
   .cmd-k-wrapper.visible {
     visibility: visible !important;
     pointer-events: auto !important;
-    background-color: rgba(0, 0, 0, 0.4) !important;
-    transition: background-color 0.15s ease-out, visibility 0s 0s !important;
+    background-color: var(--cmd-k-bg-overlay) !important;
+    transition: background-color var(--cmd-k-animation-normal) ease-out, visibility 0s 0s !important;
     backdrop-filter: blur(2px) !important;
   }
 
@@ -42,17 +37,18 @@ export const styles = `
     position: relative !important;
     width: 600px !important;
     max-width: 90vw !important;
-    background: white !important;
-    border-radius: 12px !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25) !important;
-    padding: 16px !important;
+    background: var(--cmd-k-bg-primary) !important;
+    border-radius: var(--cmd-k-radius-large) !important;
+    box-shadow: var(--cmd-k-shadow-primary) !important;
+    padding: var(--cmd-k-spacing-md) !important;
     z-index: 9999999 !important;
     display: flex !important;
     flex-direction: column !important;
     pointer-events: auto !important; /* Always capture clicks when rendered */
     transform: translateY(-20px) !important;
     opacity: 0 !important;
-    transition: transform 0.2s cubic-bezier(0.1, 0.9, 0.2, 1), opacity 0.15s ease-in !important;
+    transition: transform var(--cmd-k-animation-normal) cubic-bezier(0.1, 0.9, 0.2, 1),
+                opacity var(--cmd-k-animation-fast) ease-in !important;
     margin-top: 10vh !important;
   }
 
@@ -61,7 +57,7 @@ export const styles = `
     .cmd-k-box {
       width: 90vw !important;
       margin-top: 5vh !important;
-      padding: 12px !important;
+      padding: var(--cmd-k-spacing-sm) !important;
     }
   }
 
@@ -81,19 +77,22 @@ export const styles = `
   .cmd-k-wrapper.visible .cmd-k-box {
     transform: translateY(0) !important;
     opacity: 1 !important;
-    transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1), opacity 0.2s ease-out !important;
+    transition: transform 0.25s cubic-bezier(0.1, 0.9, 0.2, 1),
+                opacity var(--cmd-k-animation-normal) ease-out !important;
   }
 
   .cmd-k-input {
     width: 100% !important;
-    padding: 12px 16px !important;
-    border: 1px solid #e1e1e1 !important;
-    border-radius: 8px !important;
+    padding: var(--cmd-k-spacing-sm) var(--cmd-k-spacing-md) !important;
+    border: 1px solid var(--cmd-k-border-primary) !important;
+    border-radius: var(--cmd-k-radius-medium) !important;
     font-size: 16px !important;
     outline: none !important;
-    margin-bottom: 12px !important;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
-    background: #f9f9f9 !important;
+    margin-bottom: var(--cmd-k-spacing-sm) !important;
+    transition: border-color var(--cmd-k-animation-fast) ease,
+                box-shadow var(--cmd-k-animation-fast) ease !important;
+    background: var(--cmd-k-bg-secondary) !important;
+    color: var(--cmd-k-text-primary) !important;
   }
 
   /* Responsive input styling */
@@ -105,9 +104,9 @@ export const styles = `
   }
 
   .cmd-k-input:focus {
-    border-color: #2563eb !important;
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important;
-    background: white !important;
+    border-color: var(--cmd-k-accent-primary) !important;
+    box-shadow: 0 0 0 2px var(--cmd-k-accent-tertiary) !important;
+    background: var(--cmd-k-bg-primary) !important;
   }
 
   .cmd-k-results {
@@ -115,7 +114,7 @@ export const styles = `
     overflow-y: auto !important;
     overscroll-behavior: contain !important;
     position: relative !important;
-    border-radius: 8px !important;
+    border-radius: var(--cmd-k-radius-medium) !important;
   }
 
   /* Responsive results height */
@@ -141,28 +140,28 @@ export const styles = `
   }
 
   .cmd-k-results::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1) !important;
+    background: var(--cmd-k-border-primary) !important;
     border-radius: 4px !important;
   }
 
   .cmd-k-results::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.2) !important;
+    background: var(--cmd-k-border-secondary) !important;
   }
 
   .cmd-k-result {
     padding: 10px 14px !important;
     cursor: pointer !important;
-    border-radius: 8px !important;
-    transition: background 0.15s ease !important;
+    border-radius: var(--cmd-k-radius-medium) !important;
+    transition: background var(--cmd-k-animation-fast) ease !important;
     margin: 2px 0 !important;
   }
 
   .cmd-k-result:hover {
-    background: #f5f9ff !important;
+    background: var(--cmd-k-bg-hover) !important;
   }
 
   .cmd-k-result.selected {
-    background: #ebf5ff !important;
+    background: var(--cmd-k-bg-selected) !important;
     position: relative !important;
   }
 
@@ -173,48 +172,49 @@ export const styles = `
     top: 0 !important;
     height: 100% !important;
     width: 3px !important;
-    background: #2563eb !important;
-    border-top-left-radius: 8px !important;
-    border-bottom-left-radius: 8px !important;
+    background: var(--cmd-k-accent-primary) !important;
+    border-top-left-radius: var(--cmd-k-radius-medium) !important;
+    border-bottom-left-radius: var(--cmd-k-radius-medium) !important;
   }
 
   .cmd-k-result-name {
     font-weight: 500 !important;
     margin-bottom: 4px !important;
+    color: var(--cmd-k-text-primary) !important;
   }
 
   .cmd-k-result-description {
     font-size: 14px !important;
-    color: #666 !important;
+    color: var(--cmd-k-text-secondary) !important;
     margin-bottom: 8px !important;
   }
 
   .cmd-k-section-title {
     font-size: 11px !important;
     font-weight: 600 !important;
-    color: #666 !important;
+    color: var(--cmd-k-text-secondary) !important;
     text-transform: uppercase !important;
     letter-spacing: 0.5px !important;
     padding: 8px 14px 4px !important;
-    border-bottom: 1px solid #f0f0f0 !important;
+    border-bottom: 1px solid var(--cmd-k-border-secondary) !important;
   }
 
   /* Command items */
   .cmd-k-command {
     padding: 10px 14px !important;
     cursor: pointer !important;
-    border-radius: 8px !important;
-    transition: background 0.15s ease !important;
+    border-radius: var(--cmd-k-radius-medium) !important;
+    transition: background var(--cmd-k-animation-fast) ease !important;
     margin: 2px 0 !important;
     position: relative !important;
   }
 
   .cmd-k-command:hover {
-    background: #f5f9ff !important;
+    background: var(--cmd-k-bg-hover) !important;
   }
 
   .cmd-k-command.selected {
-    background: #ebf5ff !important;
+    background: var(--cmd-k-bg-selected) !important;
   }
 
   .cmd-k-command.selected::before {
@@ -224,9 +224,9 @@ export const styles = `
     top: 0 !important;
     height: 100% !important;
     width: 3px !important;
-    background: #2563eb !important;
-    border-top-left-radius: 8px !important;
-    border-bottom-left-radius: 8px !important;
+    background: var(--cmd-k-accent-primary) !important;
+    border-top-left-radius: var(--cmd-k-radius-medium) !important;
+    border-bottom-left-radius: var(--cmd-k-radius-medium) !important;
   }
 
   .cmd-k-command-header {
@@ -239,15 +239,16 @@ export const styles = `
   .cmd-k-command-name {
     font-weight: 500 !important;
     font-size: 14px !important;
+    color: var(--cmd-k-text-primary) !important;
   }
 
   .cmd-k-command-id {
     font-size: 12px !important;
-    color: #666 !important;
+    color: var(--cmd-k-text-secondary) !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    background: #f0f0f0 !important;
+    background: var(--cmd-k-bg-tertiary) !important;
     padding: 2px 6px !important;
-    border-radius: 4px !important;
+    border-radius: var(--cmd-k-radius-small) !important;
   }
 
   @media (max-width: 480px) {
@@ -259,7 +260,7 @@ export const styles = `
 
   .cmd-k-command-description {
     font-size: 13px !important;
-    color: #666 !important;
+    color: var(--cmd-k-text-secondary) !important;
   }
 
   @media (max-width: 480px) {
@@ -275,7 +276,7 @@ export const styles = `
     align-items: center !important;
     margin-bottom: 12px !important;
     padding-bottom: 8px !important;
-    border-bottom: 1px solid #eaeaea !important;
+    border-bottom: 1px solid var(--cmd-k-border-secondary) !important;
   }
 
   .cmd-k-command-title {
@@ -288,31 +289,31 @@ export const styles = `
   .cmd-k-back-button {
     background: none !important;
     border: none !important;
-    color: #2563eb !important;
+    color: var(--cmd-k-accent-primary) !important;
     cursor: pointer !important;
     font-size: 14px !important;
     padding: 4px 8px !important;
-    border-radius: 4px !important;
+    border-radius: var(--cmd-k-radius-small) !important;
   }
 
   .cmd-k-back-button:hover {
-    background: #f0f7ff !important;
+    background: var(--cmd-k-accent-tertiary) !important;
   }
 
   /* Pipeline items */
   .cmd-k-pipeline {
     padding: 10px 14px !important;
     background: transparent !important;
-    border-radius: 8px !important;
+    border-radius: var(--cmd-k-radius-medium) !important;
     display: flex !important;
     justify-content: space-between !important;
     align-items: flex-start !important;
     gap: 12px !important;
-    transition: background 0.15s ease !important;
+    transition: background var(--cmd-k-animation-fast) ease !important;
   }
 
   .cmd-k-pipeline:hover {
-    background: #f5f9ff !important;
+    background: var(--cmd-k-bg-hover) !important;
   }
 
   @media (max-width: 480px) {
@@ -336,6 +337,7 @@ export const styles = `
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     font-size: 14px !important;
+    color: var(--cmd-k-text-primary) !important;
   }
 
   @media (max-width: 480px) {
@@ -346,7 +348,7 @@ export const styles = `
 
   .cmd-k-pipeline-description {
     font-size: 12px !important;
-    color: #666 !important;
+    color: var(--cmd-k-text-secondary) !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -359,7 +361,7 @@ export const styles = `
   }
 
   .cmd-k-pipeline-org {
-    color: #2563eb !important;
+    color: var(--cmd-k-accent-primary) !important;
     font-size: 12px !important;
     white-space: nowrap !important;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
@@ -378,12 +380,12 @@ export const styles = `
     justify-content: center !important;
     cursor: pointer !important;
     padding: 4px !important;
-    border-radius: 4px !important;
-    transition: background 0.15s ease !important;
+    border-radius: var(--cmd-k-radius-small) !important;
+    transition: background var(--cmd-k-animation-fast) ease !important;
   }
 
   .cmd-k-favorite:hover {
-    background: rgba(0, 0, 0, 0.05) !important;
+    background: var(--cmd-k-bg-tertiary) !important;
   }
 
   .cmd-k-favorite-icon.active {
@@ -414,7 +416,7 @@ export const styles = `
   .cmd-k-empty-state {
     padding: 30px 16px !important;
     text-align: center !important;
-    color: #888 !important;
+    color: var(--cmd-k-text-tertiary) !important;
     font-size: 14px !important;
     font-style: italic !important;
   }
@@ -424,5 +426,46 @@ export const styles = `
       padding: 20px 12px !important;
       font-size: 13px !important;
     }
+  }
+
+  /* Theme toggle styling */
+  .cmd-k-theme-toggle {
+    display: flex !important;
+    align-items: center !important;
+    position: relative !important;
+  }
+
+  .cmd-k-theme-select {
+    position: absolute !important;
+    opacity: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    cursor: pointer !important;
+    z-index: 1 !important;
+  }
+
+  .cmd-k-theme-display {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 4px 8px !important;
+    border-radius: var(--cmd-k-radius-small) !important;
+    background: var(--cmd-k-bg-tertiary) !important;
+    color: var(--cmd-k-text-primary) !important;
+    cursor: pointer !important;
+    transition: background var(--cmd-k-animation-fast) ease !important;
+  }
+
+  .cmd-k-theme-display:hover {
+    background: var(--cmd-k-bg-hover) !important;
+  }
+
+  .cmd-k-theme-icon {
+    color: var(--cmd-k-accent-primary) !important;
+  }
+
+  .cmd-k-theme-label {
+    font-size: 13px !important;
+    font-weight: 500 !important;
   }
 `;
