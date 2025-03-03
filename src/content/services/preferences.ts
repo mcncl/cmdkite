@@ -1,13 +1,17 @@
 import { Pipeline } from "../types";
+import { Command } from "../types";
 
 interface UserPreferences {
   recentPipelines: RecentPipeline[];
   favoritePipelines: string[];
+  recentCommands: RecentCommand[];
+  favoriteCommands: string[]; // Command IDs
+  commandAliases: CommandAlias[];
   triggerKey: string;
   theme: "light" | "dark" | "system";
   defaultView: "recent" | "favorites" | "commands";
   maxResults: number;
-  recentSearches: string[]; // New field for recent searches
+  recentSearches: string[]; // For recent searches
 }
 
 interface RecentPipeline {
@@ -16,18 +20,37 @@ interface RecentPipeline {
   visitCount: number;
 }
 
+interface RecentCommand {
+  commandId: string;
+  lastUsed: number; // Timestamp
+  useCount: number;
+}
+
+interface CommandAlias {
+  id: string; // Unique identifier for this alias
+  name: string; // The alias name (what user types)
+  commandId: string; // The actual command ID this maps to
+  params?: string; // Optional default parameters
+  description?: string; // Optional custom description
+}
+
 const DEFAULT_PREFERENCES: UserPreferences = {
   recentPipelines: [],
   favoritePipelines: [],
+  recentCommands: [],
+  favoriteCommands: [],
+  commandAliases: [],
   triggerKey: "",
   theme: "system",
   defaultView: "recent",
   maxResults: 7,
-  recentSearches: [], // Default empty array
+  recentSearches: [],
 };
 
-// Maximum number of recent pipelines to store
+// Maximum number of recent items to store
 const MAX_RECENT_PIPELINES = 10;
+const MAX_RECENT_COMMANDS = 10;
+const MAX_COMMAND_ALIASES = 20;
 
 export class UserPreferencesService {
   private preferences: UserPreferences = DEFAULT_PREFERENCES;
@@ -125,7 +148,7 @@ export class UserPreferencesService {
     await this.savePreferences();
   }
 
-  // Recent searches management - new methods
+  // Recent searches management
   public async getRecentSearches(): Promise<string[]> {
     await this.ensureInitialized();
     return this.preferences.recentSearches || [];
@@ -181,6 +204,154 @@ export class UserPreferencesService {
     return [...this.preferences.favoritePipelines];
   }
 
+  // ===== NEW COMMAND HISTORY FEATURES =====
+
+  // Add a command to recent history
+  public async addRecentCommand(commandId: string): Promise<void> {
+    await this.ensureInitialized();
+
+    const existingIndex = this.preferences.recentCommands.findIndex(
+      (c) => c.commandId === commandId,
+    );
+
+    if (existingIndex >= 0) {
+      // Update existing entry
+      const existing = this.preferences.recentCommands[existingIndex];
+      this.preferences.recentCommands.splice(existingIndex, 1);
+      this.preferences.recentCommands.unshift({
+        commandId,
+        lastUsed: Date.now(),
+        useCount: existing.useCount + 1,
+      });
+    } else {
+      // Add new entry
+      this.preferences.recentCommands.unshift({
+        commandId,
+        lastUsed: Date.now(),
+        useCount: 1,
+      });
+
+      // Trim if exceeding max size
+      if (this.preferences.recentCommands.length > MAX_RECENT_COMMANDS) {
+        this.preferences.recentCommands = this.preferences.recentCommands.slice(
+          0,
+          MAX_RECENT_COMMANDS,
+        );
+      }
+    }
+
+    await this.savePreferences();
+  }
+
+  // Get recent commands
+  public async getRecentCommands(): Promise<RecentCommand[]> {
+    await this.ensureInitialized();
+    return [...this.preferences.recentCommands];
+  }
+
+  // Clear recent commands
+  public async clearRecentCommands(): Promise<void> {
+    await this.ensureInitialized();
+    this.preferences.recentCommands = [];
+    await this.savePreferences();
+  }
+
+  // Toggle a command as favorite
+  public async toggleFavoriteCommand(commandId: string): Promise<boolean> {
+    await this.ensureInitialized();
+
+    const isFavorite = this.preferences.favoriteCommands.includes(commandId);
+
+    if (isFavorite) {
+      // Remove from favorites
+      this.preferences.favoriteCommands =
+        this.preferences.favoriteCommands.filter((id) => id !== commandId);
+    } else {
+      // Add to favorites
+      this.preferences.favoriteCommands.push(commandId);
+    }
+
+    await this.savePreferences();
+    return !isFavorite; // Return new favorite status
+  }
+
+  // Check if a command is favorited
+  public async isFavoriteCommand(commandId: string): Promise<boolean> {
+    await this.ensureInitialized();
+    return this.preferences.favoriteCommands.includes(commandId);
+  }
+
+  // Get all favorite commands
+  public async getFavoriteCommands(): Promise<string[]> {
+    await this.ensureInitialized();
+    return [...this.preferences.favoriteCommands];
+  }
+
+  // ===== COMMAND ALIASES =====
+
+  // Add or update command alias
+  public async setCommandAlias(alias: CommandAlias): Promise<void> {
+    await this.ensureInitialized();
+
+    // Check if alias ID exists
+    const existingIndex = this.preferences.commandAliases.findIndex(
+      (a) => a.id === alias.id,
+    );
+
+    if (existingIndex >= 0) {
+      // Update existing alias
+      this.preferences.commandAliases[existingIndex] = alias;
+    } else {
+      // Add new alias
+      this.preferences.commandAliases.push(alias);
+
+      // Trim if exceeding max size
+      if (this.preferences.commandAliases.length > MAX_COMMAND_ALIASES) {
+        this.preferences.commandAliases = this.preferences.commandAliases.slice(
+          0,
+          MAX_COMMAND_ALIASES,
+        );
+      }
+    }
+
+    await this.savePreferences();
+  }
+
+  // Get all command aliases
+  public async getCommandAliases(): Promise<CommandAlias[]> {
+    await this.ensureInitialized();
+    return [...this.preferences.commandAliases];
+  }
+
+  // Delete a command alias by ID
+  public async deleteCommandAlias(aliasId: string): Promise<void> {
+    await this.ensureInitialized();
+    this.preferences.commandAliases = this.preferences.commandAliases.filter(
+      (a) => a.id !== aliasId,
+    );
+    await this.savePreferences();
+  }
+
+  // Find alias by name (for lookup during command execution)
+  public async findAliasByName(
+    aliasName: string,
+  ): Promise<CommandAlias | undefined> {
+    await this.ensureInitialized();
+    return this.preferences.commandAliases.find(
+      (a) => a.name.toLowerCase() === aliasName.toLowerCase(),
+    );
+  }
+
+  // Get aliases for a specific command ID
+  public async getAliasesForCommand(
+    commandId: string,
+  ): Promise<CommandAlias[]> {
+    await this.ensureInitialized();
+    return this.preferences.commandAliases.filter(
+      (a) => a.commandId === commandId,
+    );
+  }
+
   // General settings
   public async setTriggerKey(key: string): Promise<void> {
     await this.ensureInitialized();
@@ -231,3 +402,6 @@ export class UserPreferencesService {
 
 // Export a singleton instance
 export const userPreferencesService = new UserPreferencesService();
+
+// Export types for use in other files
+export type { RecentPipeline, RecentCommand, CommandAlias };
