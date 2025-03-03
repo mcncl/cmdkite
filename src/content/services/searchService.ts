@@ -3,12 +3,20 @@ import { fuzzyMatch, enhancedFuzzySearch } from "../util/search";
 import { userPreferencesService, CommandAlias } from "../services/preferences";
 import { pipelineService } from "./pipelineService";
 import { CommandManager } from "./commandManager";
+import { PrefixTrie } from "../util/trie";
 import { errorService, ErrorCategory, ErrorSeverity } from "./errorService";
 
 /**
  * Maximum number of recent searches to store
  */
 const MAX_RECENT_SEARCHES = 10;
+
+// Structure for caching search results
+interface SearchCache<T> {
+  query: string;
+  results: T[];
+  timestamp: number;
+}
 
 /**
  * Service for centralized search functionality across the application.
@@ -20,6 +28,18 @@ export class SearchService {
   private recentSearchesLoaded = false;
   private commandAliases: CommandAlias[] = [];
   private aliasesLoaded = false;
+
+  // Cache for search results
+  private commandSearchCache: SearchCache<CommandMatch> | null = null;
+  private pipelineSearchCache: Map<string, SearchCache<PipelineSuggestion>> =
+    new Map();
+
+  // Cache TTL in milliseconds (5 seconds)
+  private readonly CACHE_TTL = 5000;
+
+  // Prefix trie for command search acceleration
+  private commandTrie: PrefixTrie = new PrefixTrie();
+  private trieInitialized = false;
 
   constructor(commandManager?: CommandManager) {
     // Use dependency injection with a fallback
@@ -33,6 +53,55 @@ export class SearchService {
   }
 
   /**
+   * Initialize the prefix trie with command data
+   */
+  private async initCommandTrie(): Promise<void> {
+    if (this.trieInitialized) return;
+
+    try {
+      // Get all available commands
+      const commands = this.commandManager.getAllAvailableCommands();
+
+      // Add each command to the trie
+      for (const command of commands) {
+        // Add command ID
+        this.commandTrie.insert(command.id, command);
+
+        // Add command name (words)
+        const nameWords = command.name.toLowerCase().split(/\s+/);
+        for (const word of nameWords) {
+          if (word.length > 1) {
+            this.commandTrie.insert(word, command);
+          }
+        }
+
+        // Add keywords
+        for (const keyword of command.keywords) {
+          this.commandTrie.insert(keyword.toLowerCase(), command);
+        }
+      }
+
+      // Also add command aliases if loaded
+      if (this.aliasesLoaded) {
+        for (const alias of this.commandAliases) {
+          const command = this.commandManager.getCommandById(alias.commandId);
+          if (command) {
+            this.commandTrie.insert(alias.name.toLowerCase(), command);
+          }
+        }
+      }
+
+      this.trieInitialized = true;
+    } catch (error) {
+      errorService.captureException(error, {
+        message: "Failed to initialize command trie",
+        severity: ErrorSeverity.WARNING,
+        category: ErrorCategory.INITIALIZATION,
+      });
+    }
+  }
+
+  /**
    * Load command aliases from user preferences
    */
   private async loadCommandAliases(): Promise<void> {
@@ -42,6 +111,14 @@ export class SearchService {
       const aliases = await userPreferencesService.getCommandAliases();
       this.commandAliases = aliases || [];
       this.aliasesLoaded = true;
+
+      // Initialize trie with new aliases if trie was already initialized
+      if (this.trieInitialized) {
+        // Clear and rebuild trie
+        this.commandTrie = new PrefixTrie();
+        this.trieInitialized = false;
+        await this.initCommandTrie();
+      }
     } catch (error) {
       errorService.captureException(error, {
         message: "Failed to load command aliases",
@@ -59,6 +136,13 @@ export class SearchService {
   public async refreshCommandAliases(): Promise<void> {
     this.aliasesLoaded = false;
     await this.loadCommandAliases();
+
+    // Reset command trie to rebuild with new aliases
+    this.commandTrie = new PrefixTrie();
+    this.trieInitialized = false;
+
+    // Clear command search cache
+    this.commandSearchCache = null;
   }
 
   /**
@@ -140,7 +224,34 @@ export class SearchService {
   }
 
   /**
+   * Check if command search cache is valid
+   */
+  private isCommandCacheValid(query: string): boolean {
+    if (!this.commandSearchCache) return false;
+
+    // Check if cache is for the same query
+    if (this.commandSearchCache.query !== query) return false;
+
+    // Check if cache is still fresh
+    const now = Date.now();
+    return now - this.commandSearchCache.timestamp < this.CACHE_TTL;
+  }
+
+  /**
+   * Check if pipeline search cache is valid
+   */
+  private isPipelineCacheValid(query: string): boolean {
+    const cache = this.pipelineSearchCache.get(query);
+    if (!cache) return false;
+
+    // Check if cache is still fresh
+    const now = Date.now();
+    return now - cache.timestamp < this.CACHE_TTL;
+  }
+
+  /**
    * Search for commands (and aliases) that match the given query
+   * Uses caching and prefix trie for optimization
    *
    * @param query User input to match against commands and aliases
    * @returns Array of command matches with scores
@@ -155,6 +266,16 @@ export class SearchService {
         command: cmd,
         score: 1,
       }));
+    }
+
+    // Check cache first
+    if (this.isCommandCacheValid(query)) {
+      return [...this.commandSearchCache!.results];
+    }
+
+    // Ensure trie is initialized
+    if (!this.trieInitialized) {
+      await this.initCommandTrie();
     }
 
     const inputLower = query.toLowerCase().trim();
@@ -175,7 +296,7 @@ export class SearchService {
         );
 
         if (command && (!command.isAvailable || command.isAvailable())) {
-          return [
+          const result = [
             {
               command,
               score: 100,
@@ -188,13 +309,22 @@ export class SearchService {
                 .trim(),
             },
           ];
+
+          // Update cache
+          this.commandSearchCache = {
+            query,
+            results: result,
+            timestamp: Date.now(),
+          };
+
+          return result;
         }
       }
 
       // Then check for direct command match
       const command = this.commandManager.getCommandById(identifier);
       if (command && (!command.isAvailable || command.isAvailable())) {
-        return [
+        const result = [
           {
             command,
             score: 100,
@@ -205,19 +335,45 @@ export class SearchService {
               .trim(),
           },
         ];
+
+        // Update cache
+        this.commandSearchCache = {
+          query,
+          results: result,
+          timestamp: Date.now(),
+        };
+
+        return result;
       }
     }
 
-    // For non-exact matches, search both commands and aliases
-    const commands = this.commandManager.getAllAvailableCommands();
+    // For faster search on short queries, start with trie-based matches
+    if (inputLower.length <= 3) {
+      // Get matches from trie
+      const matches = this.commandTrie.search(inputLower);
 
-    // Score and filter commands
-    const commandMatches = commands
-      .map((cmd) => ({
-        command: cmd,
-        score: this.calculateCommandMatchScore(inputLower, cmd),
-      }))
-      .filter((match) => match.score > 0);
+      // Convert to command matches
+      for (const command of matches) {
+        // Only include available commands
+        if (!command.isAvailable || command.isAvailable()) {
+          const score = this.calculateCommandMatchScore(inputLower, command);
+          if (score > 0) {
+            results.push({ command, score });
+          }
+        }
+      }
+    } else {
+      // For longer queries, use full text search
+      const commands = this.commandManager.getAllAvailableCommands();
+
+      // Score and filter commands
+      results = commands
+        .map((cmd) => ({
+          command: cmd,
+          score: this.calculateCommandMatchScore(inputLower, cmd),
+        }))
+        .filter((match) => match.score > 0);
+    }
 
     // Define the type for alias matches
     type AliasCommandMatch = {
@@ -275,9 +431,14 @@ export class SearchService {
       .filter((match): match is AliasCommandMatch => match !== null);
 
     // Combine matches and sort by score
-    results = [...commandMatches, ...aliasMatches].sort(
-      (a, b) => b.score - a.score,
-    );
+    results = [...results, ...aliasMatches].sort((a, b) => b.score - a.score);
+
+    // Update cache
+    this.commandSearchCache = {
+      query,
+      results: [...results], // Create a copy to prevent cache mutation
+      timestamp: Date.now(),
+    };
 
     return results;
   }
@@ -410,7 +571,7 @@ export class SearchService {
   }
 
   /**
-   * Search for pipelines matching the given query
+   * Search for pipelines matching the given query with caching
    *
    * @param query The search term
    * @param limit Maximum number of results to return
@@ -425,6 +586,19 @@ export class SearchService {
     // Return empty results for empty search term
     if (!query.trim()) {
       return [];
+    }
+
+    // Check cache first
+    if (this.isPipelineCacheValid(query)) {
+      const cache = this.pipelineSearchCache.get(query)!;
+
+      // If limit is the same or larger, return all cached results
+      if (cache.results.length <= limit) {
+        return [...cache.results];
+      }
+
+      // Otherwise return limited results
+      return [...cache.results.slice(0, limit)];
     }
 
     // Try to save the search (async, don't await)
@@ -461,7 +635,7 @@ export class SearchService {
     }
 
     // Perform search using enhanced fuzzy search
-    return pipelineService.pipelines
+    const results = pipelineService.pipelines
       .map((pipeline) => {
         // Create a combined field for full path
         const pipelineWithPath = {
@@ -481,8 +655,17 @@ export class SearchService {
         };
       })
       .filter((match) => match.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+      .sort((a, b) => b.score - a.score);
+
+    // Update cache with unlimited results for future use
+    this.pipelineSearchCache.set(query, {
+      query,
+      results: [...results],
+      timestamp: Date.now(),
+    });
+
+    // Return only the requested limit
+    return results.slice(0, limit);
   }
 
   /**
@@ -611,7 +794,7 @@ export class SearchService {
   }
 
   /**
-   * Get recent command
+   * Get recent commands
    *
    * @param limit Maximum number of recent commands to return
    * @returns Array of {command, useCount} objects
@@ -647,7 +830,12 @@ export class SearchService {
       return [];
     }
   }
-}
 
-// Export singleton instance
-export const searchService = new SearchService();
+  /**
+   * Clear all caches to force fresh data to be loaded
+   */
+  public clearCaches(): void {
+    this.commandSearchCache = null;
+    this.pipelineSearchCache.clear();
+  }
+}

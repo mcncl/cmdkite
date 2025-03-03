@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Pipeline } from "../types";
-import { userPreferencesService } from "../services/preferences";
+import { Pipeline } from "../../types";
+import { userPreferencesService } from "../../services/preferences";
 
 interface PipelineItemProps {
   pipeline: Pipeline;

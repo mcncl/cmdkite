@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { searchService } from "../../services/searchService";
+import { SearchService } from "../../services/searchService";
 import { userPreferencesService } from "../../services/preferences";
 import { ThemeToggle } from "../ThemeToggle";
 import type {
@@ -40,6 +40,8 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   // Refs
   const boxRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  const searchService = new SearchService();
 
   // Reset state when closing
   useEffect(() => {

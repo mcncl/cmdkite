@@ -5,7 +5,7 @@ import React, {
   useRef,
   useMemo,
 } from "react";
-import { SearchService, searchService } from "../../services/searchService";
+import { SearchService } from "../../services/searchService";
 import { userPreferencesService } from "../../services/preferences";
 import type {
   Command,
