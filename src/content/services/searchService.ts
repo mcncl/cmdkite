@@ -219,6 +219,14 @@ export class SearchService {
       }))
       .filter((match) => match.score > 0);
 
+    // Define the type for alias matches
+    type AliasCommandMatch = {
+      command: Command;
+      score: number;
+      alias: CommandAlias;
+      inputParams: string;
+    };
+
     // Score and filter aliases
     const aliasMatches = this.commandAliases
       .filter((alias) => {
@@ -264,7 +272,7 @@ export class SearchService {
             }
           : null;
       })
-      .filter((match): match is CommandMatch => match !== null);
+      .filter((match): match is AliasCommandMatch => match !== null);
 
     // Combine matches and sort by score
     results = [...commandMatches, ...aliasMatches].sort(
@@ -603,7 +611,7 @@ export class SearchService {
   }
 
   /**
-   * Get recent commands
+   * Get recent command
    *
    * @param limit Maximum number of recent commands to return
    * @returns Array of {command, useCount} objects

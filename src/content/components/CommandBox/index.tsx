@@ -177,23 +177,41 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     // Always show commands when box first opens with empty input
     if (!input.trim()) {
       setPipelineSuggestions([]);
-      setCommandMatches(searchService.searchCommands(""));
-      setSelectedIndex(0);
+
+      // Fix: properly await the Promise before updating state
+      const fetchCommands = async () => {
+        try {
+          const matches = await searchService.searchCommands("");
+          setCommandMatches(matches);
+          setSelectedIndex(0);
+        } catch (error) {
+          console.error("Error fetching commands:", error);
+          setCommandMatches([]);
+        }
+      };
+
+      fetchCommands();
       return;
     }
 
     // Debounce expensive search operations
     const handler = setTimeout(async () => {
-      // Get matching commands using searchService
-      const matches = searchService.searchCommands(input);
-      setCommandMatches(matches);
+      try {
+        // Fix: properly await the Promise before updating state
+        const matches = await searchService.searchCommands(input);
+        setCommandMatches(matches);
 
-      // Search for pipelines using the searchService
-      const pipelineMatches = await searchPipelines(input);
-      setPipelineSuggestions(pipelineMatches);
+        // Search for pipelines using the searchService
+        const pipelineMatches = await searchPipelines(input);
+        setPipelineSuggestions(pipelineMatches);
 
-      // Reset selection index when results change
-      setSelectedIndex(0);
+        // Reset selection index when results change
+        setSelectedIndex(0);
+      } catch (error) {
+        console.error("Error searching:", error);
+        setCommandMatches([]);
+        setPipelineSuggestions([]);
+      }
     }, 120);
 
     return () => clearTimeout(handler);

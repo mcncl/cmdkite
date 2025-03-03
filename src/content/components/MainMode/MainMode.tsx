@@ -62,30 +62,51 @@ export const MainMode: React.FC<MainModeProps> = ({
             {
               id: "favoriteCommands",
               items: Array(favoriteCommandsCount).fill(null),
-              // Fix: Add the item parameter (even if unused) to match the expected function signature
-              onItemSelect: (item, index) => {
+              // Fix: Change to use a function that only takes one parameter
+              onItemSelect: (item) => {
+                // Get the section to target
                 const favoriteCommandContainer = document.querySelector(
                   "#favorite-commands-section",
                 )?.parentElement;
-                const commandElement =
-                  favoriteCommandContainer?.querySelectorAll('[role="option"]')[
-                    index
-                  ] as HTMLElement;
-                commandElement?.click();
+                // Get all options in that section
+                const commandElements =
+                  favoriteCommandContainer?.querySelectorAll('[role="option"]');
+                // Find the index of the item by counting through the array items
+                const itemArray = Array(favoriteCommandsCount).fill(null);
+                const index = itemArray.indexOf(item);
+                // Click the element at that index
+                if (
+                  commandElements &&
+                  index >= 0 &&
+                  index < commandElements.length
+                ) {
+                  (commandElements[index] as HTMLElement)?.click();
+                }
               },
             },
             {
               id: "recentCommands",
               items: Array(recentCommandsCount).fill(null),
-              // Fix: Add the item parameter (even if unused) to match the expected function signature
-              onItemSelect: (item, index) => {
+              // Fix: Change to use a function that only takes one parameter
+              onItemSelect: (item) => {
+                // Get the section to target
                 const recentCommandContainer = document.querySelector(
                   "#recent-commands-section",
                 )?.parentElement;
-                const commandElement = recentCommandContainer?.querySelectorAll(
-                  '[role="option"]',
-                )[index] as HTMLElement;
-                commandElement?.click();
+                // Get all options in that section
+                const commandElements =
+                  recentCommandContainer?.querySelectorAll('[role="option"]');
+                // Find the index of the item by counting through the array items
+                const itemArray = Array(recentCommandsCount).fill(null);
+                const index = itemArray.indexOf(item);
+                // Click the element at that index
+                if (
+                  commandElements &&
+                  index >= 0 &&
+                  index < commandElements.length
+                ) {
+                  (commandElements[index] as HTMLElement)?.click();
+                }
               },
             },
           ]

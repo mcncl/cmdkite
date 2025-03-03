@@ -146,7 +146,7 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
       // Use async function to search commands with alias support
       const fetchCommands = async () => {
         try {
-          // Fix: Store results in a variable first, then update state
+          // Fix: Use await to get the actual result before updating state
           const matches = await searchService.searchCommands("");
           setCommandMatches(matches);
         } catch (error) {
@@ -162,7 +162,7 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     // Debounce expensive search operations
     const handler = setTimeout(async () => {
       try {
-        // Fix: Store results in variables first, then update state
+        // Fix: Use await to get the actual results before updating state
         const matches = await searchService.searchCommands(input);
         setCommandMatches(matches);
 
