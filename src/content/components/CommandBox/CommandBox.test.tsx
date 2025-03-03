@@ -1,7 +1,6 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { CommandBox } from "../CommandBox";
-import { searchService } from "../../services/searchService";
 import { userPreferencesService } from "../../services/preferences";
 
 // Mock the keyboard navigation hook
@@ -26,7 +25,7 @@ jest.mock("../../hooks", () => ({
 }));
 
 // Mock the search service
-jest.mock("../../services/searchService", () => ({
+jest.mock("../../services/SearchService", () => ({
   searchService: {
     searchCommands: jest.fn().mockReturnValue([
       {

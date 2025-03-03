@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot, Root } from "react-dom/client";
-import { CommandBox as CommandBoxComponent } from "../components/CommandBox";
+import { CommandBox } from "../components/CommandBox";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ErrorProvider } from "../components/ErrorProvider";
 import { ThemeProvider } from "../components/ThemeProvider";
@@ -15,6 +15,7 @@ import { themeService } from "../services/themeService";
 declare global {
   interface Window {
     toggleCommandBox: () => void;
+    cmdkiteInitialized: boolean;
   }
 }
 
@@ -52,6 +53,9 @@ function cleanup(): void {
 
   // Clean up the theme service
   themeService.dispose();
+
+  // Clear the initialization flag
+  window.cmdkiteInitialized = false;
 }
 
 const CommandBoxContainer: React.FC = () => {
@@ -61,6 +65,11 @@ const CommandBoxContainer: React.FC = () => {
   React.useEffect(() => {
     window.toggleCommandBox = () => {
       setIsVisible((prev) => !prev);
+    };
+
+    // Cleanup when component unmounts
+    return () => {
+      delete window.toggleCommandBox;
     };
   }, []);
 
@@ -90,7 +99,7 @@ const CommandBoxContainer: React.FC = () => {
             </div>
           }
         >
-          <CommandBoxComponent
+          <CommandBox
             isVisible={isVisible}
             onClose={() => setIsVisible(false)}
           />
@@ -102,35 +111,90 @@ const CommandBoxContainer: React.FC = () => {
 
 function initializeCommandBox(): void {
   try {
+    // Import performance monitoring
+    const {
+      startTiming,
+      endTiming,
+      PerformanceOperation,
+    } = require("./performanceMonitor");
+    const { applyAllCSSFixes } = require("./cssUpdates");
+
+    // Start timing initialization
+    startTiming(PerformanceOperation.UI_INTERACTION);
+
+    // Prevent multiple initializations
+    if (window.cmdkiteInitialized) {
+      console.log("CMDKite already initialized, skipping");
+      endTiming(PerformanceOperation.UI_INTERACTION);
+      return;
+    }
+
+    // Set initialization flag
+    window.cmdkiteInitialized = true;
+
     // Cleanup any existing instances
     cleanup();
+
+    // Apply CSS fixes
+    applyAllCSSFixes();
 
     // Create container
     const container = document.createElement("div");
     container.id = "buildkite-command-box";
 
-    // Critical change: Don't add any CSS that would block interaction when inactive
+    // Don't add any CSS that would block interaction when inactive
     document.body.appendChild(container);
 
-    // Create React root and render
-    root = createRoot(container);
-    root.render(
-      <React.StrictMode>
-        <CommandBoxContainer />
-      </React.StrictMode>,
-    );
+    // Create React root and render with error handling
+    try {
+      root = createRoot(container);
 
-    // Initialize theme service
-    themeService.initialize().catch((error) => {
-      errorService.captureException(error, {
-        message: "Failed to initialize theme service",
-        severity: ErrorSeverity.ERROR,
-        category: ErrorCategory.INITIALIZATION,
+      // Use ErrorBoundary at the highest level
+      root.render(
+        <React.StrictMode>
+          <ErrorBoundary
+            componentName="CommandBoxContainer"
+            errorCategory={ErrorCategory.UI}
+            fallbackMessage="The command box couldn't be initialized properly"
+          >
+            <CommandBoxContainer />
+          </ErrorBoundary>
+        </React.StrictMode>,
+      );
+
+      // Initialize theme service
+      themeService.initialize().catch((error) => {
+        errorService.captureException(error, {
+          message: "Failed to initialize theme service",
+          severity: ErrorSeverity.ERROR,
+          category: ErrorCategory.INITIALIZATION,
+        });
       });
-    });
 
-    // Initialize port connection
-    connectToServiceWorker();
+      // Initialize port connection
+      connectToServiceWorker();
+
+      // Record initialization time and mark complete
+      endTiming(PerformanceOperation.UI_INTERACTION, 200);
+      console.log("CMDKite initialized successfully");
+
+      // Import debugger
+      import("./debug").catch((err) =>
+        console.warn("Could not load debugger:", err),
+      );
+    } catch (renderError) {
+      errorService.captureException(renderError, {
+        message: "React render failed",
+        severity: ErrorSeverity.CRITICAL,
+        category: ErrorCategory.UI,
+      });
+
+      // Clean up if render fails
+      cleanup();
+
+      // Record failed initialization
+      endTiming(PerformanceOperation.UI_INTERACTION);
+    }
   } catch (error) {
     // Log initialization error
     errorService.captureException(error, {
@@ -172,7 +236,7 @@ function connectToServiceWorker(): void {
 
       port = null;
       // Only attempt reconnect if we're not in cleanup
-      if (root) {
+      if (window.cmdkiteInitialized) {
         portReconnectTimer = setTimeout(
           connectToServiceWorker,
           RECONNECT_DELAY,
@@ -187,17 +251,23 @@ function connectToServiceWorker(): void {
     });
 
     // Only attempt reconnect if we're not in cleanup
-    if (root) {
+    if (window.cmdkiteInitialized) {
       portReconnectTimer = setTimeout(connectToServiceWorker, RECONNECT_DELAY);
     }
   }
 }
 
-// Initialize on DOM load
+// Initialize on DOM load with safeguards
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initializeCommandBox);
+  document.addEventListener("DOMContentLoaded", () => {
+    if (!window.cmdkiteInitialized) {
+      initializeCommandBox();
+    }
+  });
 } else {
-  initializeCommandBox();
+  if (!window.cmdkiteInitialized) {
+    initializeCommandBox();
+  }
 }
 
 // Cleanup on navigation
@@ -215,17 +285,34 @@ chrome.runtime.onMessage.addListener(
         isProcessingMessage = true;
 
         // Ensure we have a working instance
-        if (!root) {
+        if (!window.cmdkiteInitialized) {
           initializeCommandBox();
+
+          // Small delay to ensure the toggleCommandBox function is registered
+          setTimeout(() => {
+            if (window.toggleCommandBox) {
+              window.toggleCommandBox();
+            }
+            sendResponse({ success: true });
+            isProcessingMessage = false;
+          }, 100);
+        } else {
+          // Toggle immediately if already initialized
+          if (window.toggleCommandBox) {
+            window.toggleCommandBox();
+          }
+          sendResponse({ success: true });
+
+          // Reset the processing flag after a short delay
+          setTimeout(() => {
+            isProcessingMessage = false;
+          }, 100);
         }
-
-        window.toggleCommandBox();
-        sendResponse({ success: true });
-
-        // Reset the processing flag after a short delay
-        setTimeout(() => {
-          isProcessingMessage = false;
-        }, 100);
+      } else {
+        sendResponse({
+          success: false,
+          error: "Action not recognized or message is already being processed",
+        });
       }
     } catch (error) {
       errorService.captureException(error, {
@@ -244,6 +331,6 @@ chrome.runtime.onMessage.addListener(
       isProcessingMessage = false;
     }
 
-    return true;
+    return true; // Keep the message channel open for async response
   },
 );

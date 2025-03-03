@@ -12,14 +12,15 @@ export enum ErrorSeverity {
  * Error category types for grouping similar errors
  */
 export enum ErrorCategory {
-  NETWORK = "network", // Network/API related errors
-  COMMAND = "command", // Command execution errors
-  PIPELINE = "pipeline", // Pipeline-related errors
-  UI = "ui", // UI rendering errors
-  STORAGE = "storage", // Storage/persistence errors
-  INITIALIZATION = "init", // Startup/initialization errors
-  NAVIGATION = "navigation", // Navigation-related errors
-  UNKNOWN = "unknown", // Uncategorized errors
+  NETWORK = "network",
+  COMMAND = "command",
+  PIPELINE = "pipeline",
+  UI = "ui",
+  STORAGE = "storage",
+  INITIALIZATION = "init",
+  NAVIGATION = "navigation",
+  PERFORMANCE = "performance",
+  UNKNOWN = "unknown",
 }
 
 /**
@@ -223,6 +224,7 @@ export class ErrorService {
       [ErrorCategory.INITIALIZATION]:
         "The extension had trouble starting. Please refresh the page.",
       [ErrorCategory.NAVIGATION]: "Navigation failed. Please try again.",
+      [ErrorCategory.PERFORMANCE]: "Performance issue detected.",
       [ErrorCategory.UNKNOWN]: "An unexpected error occurred.",
     };
 

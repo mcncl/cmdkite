@@ -1,11 +1,5 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  memo,
-  useMemo,
-} from "react";
+// src/content/components/CommandBox/CommandBox.tsx
+import React, { useState, useEffect, useCallback, useRef, memo } from "react";
 import { SearchService } from "../../services/SearchService/searchService";
 import { userPreferencesService } from "../../services/preferences";
 import { ThemeToggle } from "../ThemeToggle";
@@ -20,20 +14,20 @@ import { MainMode } from "../MainMode";
 import { CommandMode } from "../CommandMode";
 import { CommandAliasManager } from "../CommandAliasManager";
 import { useErrorHandler } from "../../hooks";
-import { DebouncedInput } from "../DebouncedInput";
-import { VirtualizedList } from "../VirtualizedList";
 import { ErrorBoundary } from "../ErrorBoundary";
 
 // Define view modes
 type ViewMode = "main" | "command" | "alias-manager";
 
-// Inner component for optimization with memo
-const CommandBoxInner: React.FC<CommandBoxProps> = memo(
-  ({ onClose, isVisible = false }) => {
-    // Initialize search service with a ref to prevent recreation
-    const searchServiceRef = useRef(new SearchService());
+// Get the singleton instance of SearchService
+import { searchService } from "../../services/SearchService/searchService";
 
-    // State - split into smaller pieces to avoid unnecessary re-renders
+/**
+ * CommandBox - Command palette component for quick navigation
+ */
+export const CommandBox: React.FC<CommandBoxProps> = memo(
+  ({ onClose, isVisible = false }) => {
+    // State management
     const [input, setInput] = useState("");
     const [viewMode, setViewMode] = useState<ViewMode>("main");
     const [activeCommand, setActiveCommand] = useState<Command | null>(null);
@@ -43,6 +37,10 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
     >([]);
     const [commandMatches, setCommandMatches] = useState<CommandMatch[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const [selectedSection, setSelectedSection] = useState<
+      "commands" | "pipelines"
+    >("commands");
 
     // Error handling
     const { handleError } = useErrorHandler();
@@ -52,6 +50,7 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
     const resultsRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const subInputRef = useRef<HTMLInputElement>(null);
+    const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
     // Reset state when closing
     useEffect(() => {
@@ -63,6 +62,7 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
         setActiveCommand(null);
         setCommandSubInput("");
         setIsSearching(false);
+        setSelectedIndex(0);
       } else {
         // Focus input when opening
         setTimeout(() => {
@@ -75,13 +75,13 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
       }
     }, [isVisible, viewMode]);
 
-    // Memoized handlers
+    // Execute a command
     const executeCommand = useCallback(
       async (command: Command, input?: string) => {
         if (!command) return;
 
         try {
-          await searchServiceRef.current.executeCommand(command, input);
+          await searchService.executeCommand(command, input);
           onClose?.();
         } catch (error) {
           handleError(error, `Failed to execute command: ${command.id}`);
@@ -90,12 +90,14 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
       [onClose, handleError],
     );
 
+    // Enter command mode
     const enterCommandMode = useCallback((command: Command) => {
       setActiveCommand(command);
       setViewMode("command");
       setCommandSubInput("");
+      setSelectedIndex(0);
 
-      // Focus sub-input after a short delay to ensure it exists
+      // Focus sub-input after a short delay
       setTimeout(() => {
         if (subInputRef.current) {
           subInputRef.current.focus();
@@ -103,10 +105,12 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
       }, 50);
     }, []);
 
+    // Go back to main mode
     const handleBackToMain = useCallback(() => {
       setViewMode("main");
       setActiveCommand(null);
       setCommandSubInput("");
+      setSelectedIndex(0);
 
       // Focus main input after a short delay
       setTimeout(() => {
@@ -116,17 +120,16 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
       }, 50);
     }, []);
 
+    // Open alias manager
     const handleOpenAliasManager = useCallback(() => {
       setViewMode("alias-manager");
     }, []);
 
+    // Close alias manager
     const handleCloseAliasManager = useCallback(async () => {
-      // Refresh command aliases when returning from alias manager
       setViewMode("main");
       try {
-        await searchServiceRef.current.refreshCommandAliases();
-
-        // Clear command matches to force a refresh
+        await searchService.refreshCommandAliases();
         setCommandMatches([]);
 
         // Focus main input
@@ -140,6 +143,7 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
       }
     }, [handleError]);
 
+    // Handle pipeline selection
     const handlePipelineSelect = useCallback(
       (pipeline: Pipeline) => {
         if (!pipeline) return;
@@ -155,33 +159,45 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
       [handleError],
     );
 
+    // Handle input changes
     const handleInputChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
-        setInput(e.target.value);
+        const newValue = e.target.value;
+        // Don't update state if value hasn't changed - prevents unnecessary rerenders
+        if (newValue === input) return;
+
+        setInput(newValue);
+        // Only update search status when it changes to avoid rerenders
+        const isSearchingNow = newValue.trim().length > 0;
+        if (isSearchingNow !== isSearching) {
+          setIsSearching(isSearchingNow);
+        }
       },
-      [],
+      [input, isSearching],
     );
 
-    // For UI updates during typing (before debounce)
-    const handleInputChangeImmediate = useCallback((value: string) => {
-      setIsSearching(value.trim().length > 0);
-    }, []);
-
+    // Handle command sub-input changes
     const handleCommandSubInputChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
-        setCommandSubInput(e.target.value);
+        const newValue = e.target.value;
+        // Don't update state if value hasn't changed
+        if (newValue === commandSubInput) return;
+
+        setCommandSubInput(newValue);
+        // Only update search status when it changes
+        const isSearchingNow = newValue.trim().length > 0;
+        if (isSearchingNow !== isSearching) {
+          setIsSearching(isSearchingNow);
+        }
       },
-      [],
+      [commandSubInput, isSearching],
     );
 
-    // Enhanced pipeline search function with memoization
+    // Search for pipelines with debouncing
     const searchPipelines = useCallback(
       async (searchTerm: string, limit: number = 5) => {
         try {
-          return await searchServiceRef.current.searchPipelines(
-            searchTerm,
-            limit,
-          );
+          return await searchService.searchPipelines(searchTerm, limit);
         } catch (error) {
           handleError(error, "Failed to search pipelines");
           return [];
@@ -190,18 +206,24 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
       [handleError],
     );
 
-    // Update suggestions/commands when input changes in main view with debouncing
+    // Update commands/pipelines when input changes in main mode
     useEffect(() => {
       if (viewMode !== "main") return;
+
+      // Clear any existing debounce timer
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = null;
+      }
 
       // Always show commands when box first opens with empty input
       if (!input.trim()) {
         setPipelineSuggestions([]);
-        // Use async function to search commands with alias support
+
+        // Use async function to search commands
         const fetchCommands = async () => {
           try {
-            // Get all available commands when input is empty
-            const matches = await searchServiceRef.current.searchCommands("");
+            const matches = await searchService.searchCommands("");
             setCommandMatches(matches);
           } catch (error) {
             handleError(error, "Failed to search commands");
@@ -216,12 +238,12 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
       // Set that we're searching
       setIsSearching(true);
 
-      // Search for commands and pipelines
-      const performSearch = async () => {
+      // Debounce search operations
+      searchDebounceRef.current = setTimeout(async () => {
         try {
           // Run searches in parallel for better performance
           const [commandResults, pipelineResults] = await Promise.all([
-            searchServiceRef.current.searchCommands(input),
+            searchService.searchCommands(input),
             searchPipelines(input, 7),
           ]);
 
@@ -233,44 +255,64 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
           setPipelineSuggestions([]);
         } finally {
           setIsSearching(false);
+          searchDebounceRef.current = null;
+        }
+      }, 200); // 200ms debounce
+
+      // Cleanup function
+      return () => {
+        if (searchDebounceRef.current) {
+          clearTimeout(searchDebounceRef.current);
+          searchDebounceRef.current = null;
         }
       };
-
-      performSearch();
     }, [input, viewMode, searchPipelines, handleError]);
 
     // Update pipeline suggestions in command mode
     useEffect(() => {
       if (viewMode !== "command" || !activeCommand) return;
 
+      // Clear any existing debounce timer
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = null;
+      }
+
       // Show recent pipelines when no input
       if (
         !commandSubInput.trim() &&
         (activeCommand.id === "pipeline" || activeCommand.id === "new-build")
       ) {
-        // Get recent pipelines from searchService
-        searchServiceRef.current
-          .getRecentPipelines(5)
-          .then((pipelines) => {
-            if (pipelines.length > 0) {
-              const recentPipelineSuggestions = pipelines.map((pipeline) => ({
-                pipeline,
-                score: 1,
-              }));
-              setPipelineSuggestions(recentPipelineSuggestions);
-            }
-          })
-          .catch((error) =>
-            handleError(error, "Failed to get recent pipelines"),
-          );
+        // Only fetch if we don't already have recent pipelines
+        if (pipelineSuggestions.length === 0) {
+          // Get recent pipelines
+          searchService
+            .getRecentPipelines(5)
+            .then((pipelines) => {
+              if (pipelines.length > 0) {
+                const recentPipelineSuggestions = pipelines.map((pipeline) => ({
+                  pipeline,
+                  score: 1,
+                }));
+                setPipelineSuggestions(recentPipelineSuggestions);
+              } else {
+                setPipelineSuggestions([]);
+              }
+            })
+            .catch((error) =>
+              handleError(error, "Failed to get recent pipelines"),
+            );
+        }
         return;
       }
 
-      // Set that we're searching
-      setIsSearching(true);
+      // Update search status if needed
+      if (!isSearching && commandSubInput.trim().length > 0) {
+        setIsSearching(true);
+      }
 
       // Debounce search operations
-      const searchTimer = setTimeout(async () => {
+      searchDebounceRef.current = setTimeout(async () => {
         if (
           activeCommand.id === "pipeline" ||
           activeCommand.id === "new-build"
@@ -280,21 +322,32 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
             setPipelineSuggestions(matches);
           } catch (error) {
             handleError(error, "Failed to search pipelines");
+            setPipelineSuggestions([]);
           } finally {
             setIsSearching(false);
+            searchDebounceRef.current = null;
           }
         } else {
           setIsSearching(false);
+          searchDebounceRef.current = null;
         }
-      }, 200);
+      }, 200); // 200ms debounce
 
-      return () => clearTimeout(searchTimer);
+      // Cleanup function
+      return () => {
+        if (searchDebounceRef.current) {
+          clearTimeout(searchDebounceRef.current);
+          searchDebounceRef.current = null;
+        }
+      };
     }, [
       commandSubInput,
       viewMode,
       activeCommand,
       searchPipelines,
       handleError,
+      isSearching,
+      pipelineSuggestions.length,
     ]);
 
     // Handle click outside to close
@@ -309,30 +362,26 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
         }
       };
 
-      document.addEventListener("mousedown", handleClickOutside);
+      if (isVisible) {
+        document.addEventListener("mousedown", handleClickOutside);
+      }
+
       return () => {
         document.removeEventListener("mousedown", handleClickOutside);
       };
     }, [isVisible, onClose]);
 
-    // Handle keyboard navigation and selection
-    const [selectedIndex, setSelectedIndex] = useState(0);
-    const [selectedSection, setSelectedSection] = useState<
-      "commands" | "pipelines"
-    >("commands");
-
-    // Get total count of selectable items
+    // Get current state values for keyboard navigation
+    const hasCommands = commandMatches.length > 0;
+    const hasPipelines = pipelineSuggestions.length > 0;
     const totalCommandsCount = commandMatches.length;
     const totalPipelinesCount = pipelineSuggestions.length;
-    const hasCommands = totalCommandsCount > 0;
-    const hasPipelines = totalPipelinesCount > 0;
 
-    // Calculate max index based on visible sections
-    const maxIndex = useMemo(() => {
-      return selectedSection === "commands"
+    // Calculate max index (simple enough to not need useMemo)
+    const maxIndex =
+      selectedSection === "commands"
         ? Math.max(0, totalCommandsCount - 1)
         : Math.max(0, totalPipelinesCount - 1);
-    }, [selectedSection, totalCommandsCount, totalPipelinesCount]);
 
     // Handle keyboard navigation in main mode
     const handleMainModeKeyDown = useCallback(
@@ -471,19 +520,10 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
       ],
     );
 
-    // Update selected index when items change
+    // Reset selected index when switching sections or when items change
     useEffect(() => {
       setSelectedIndex(0);
-    }, [commandMatches, pipelineSuggestions, selectedSection]);
-
-    // Create memoized result counters
-    const resultCounts = useMemo(
-      () => ({
-        commands: commandMatches.length,
-        pipelines: pipelineSuggestions.length,
-      }),
-      [commandMatches.length, pipelineSuggestions.length],
-    );
+    }, [selectedSection, commandMatches.length, pipelineSuggestions.length]);
 
     // Determine which component to render based on view mode
     const renderContent = () => {
@@ -494,7 +534,9 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
               <MainMode
                 input={input}
                 onInputChange={handleInputChange}
-                onInputChangeImmediate={handleInputChangeImmediate}
+                onInputChangeImmediate={(value) =>
+                  setIsSearching(value.trim().length > 0)
+                }
                 isSearching={isSearching}
                 commandMatches={commandMatches}
                 pipelineSuggestions={pipelineSuggestions}
@@ -513,6 +555,8 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
                 onOpenAliasManager={handleOpenAliasManager}
                 onKeyDown={handleMainModeKeyDown}
                 inputRef={inputRef}
+                resultsContainerRef={resultsRef}
+                onClose={onClose}
               />
             </ErrorBoundary>
           );
@@ -541,6 +585,7 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
                 onBack={handleBackToMain}
                 onKeyDown={handleCommandModeKeyDown}
                 inputRef={subInputRef}
+                resultsContainerRef={resultsRef}
               />
             </ErrorBoundary>
           );
@@ -557,23 +602,16 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
 
     // Render component
     return (
-      <div
-        className={`cmd-k ${isVisible ? "visible" : "hidden"}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cmd-k-title"
-      >
-        <div className="cmd-k-backdrop" onClick={onClose} />
-
+      <div className={`cmd-k-wrapper ${isVisible ? "visible" : ""}`}>
         <div
           ref={boxRef}
           className="cmd-k-box"
-          role="combobox"
-          aria-expanded={isVisible}
-          aria-haspopup="listbox"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cmd-k-title"
         >
           <div className="cmd-k-header">
-            <h2 id="cmd-k-title" className="cmd-k-title">
+            <h2 id="cmd-k-title" className="cmd-k-header-title">
               {viewMode === "main"
                 ? "Command Palette"
                 : viewMode === "command"
@@ -590,12 +628,3 @@ const CommandBoxInner: React.FC<CommandBoxProps> = memo(
     );
   },
 );
-
-/**
- * CommandBox - optimized command palette component
- * Uses memoization, virtualized lists, and debounced inputs
- * for maximum performance.
- */
-export const CommandBox: React.FC<CommandBoxProps> = (props) => {
-  return <CommandBoxInner {...props} />;
-};

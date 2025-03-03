@@ -23,6 +23,9 @@ interface SearchCache<T> {
   timestamp: number;
 }
 
+// Create singleton instance
+let instance: SearchService | null = null;
+
 /**
  * Service for centralized search functionality across the application.
  * Handles searching commands, pipelines, and managing search history.
@@ -33,6 +36,8 @@ export class SearchService {
   private recentSearchesLoaded = false;
   private commandAliases: CommandAlias[] = [];
   private aliasesLoaded = false;
+  private initPromise: Promise<void> | null = null;
+  private initialized = false;
 
   // Cache for search results
   private commandSearchCache: SearchCache<CommandMatch> | null = null;
@@ -46,15 +51,70 @@ export class SearchService {
   private commandTrie: PrefixTrie = new PrefixTrie();
   private trieInitialized = false;
 
-  constructor(commandManager?: CommandManager) {
+  /**
+   * Get the singleton instance of SearchService
+   */
+  public static getInstance(): SearchService {
+    if (!instance) {
+      instance = new SearchService();
+    }
+    return instance;
+  }
+
+  /**
+   * Private constructor to enforce singleton pattern
+   */
+  private constructor(commandManager?: CommandManager) {
     // Use dependency injection with a fallback
     this.commandManager = commandManager || new CommandManager();
 
-    // Wrap initialization in a try-catch to prevent breaking tests
-    this.loadRecentSearches().catch(console.error);
+    // Initialize in the background
+    this.initPromise = this.initialize();
+  }
 
-    // Load command aliases
-    this.loadCommandAliases().catch(console.error);
+  /**
+   * Initialize the search service
+   */
+  private async initialize(): Promise<void> {
+    if (this.initialized) return;
+
+    try {
+      // Load recent searches and command aliases in parallel
+      await Promise.all([this.loadRecentSearches(), this.loadCommandAliases()]);
+
+      // Initialize command trie in the background
+      this.initCommandTrie().catch((error) => {
+        errorService.captureException(error, {
+          message: "Failed to initialize command trie",
+          severity: ErrorSeverity.WARNING,
+          category: ErrorCategory.INITIALIZATION,
+        });
+      });
+
+      this.initialized = true;
+    } catch (error) {
+      errorService.captureException(error, {
+        message: "Failed to initialize search service",
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.INITIALIZATION,
+      });
+
+      // Set initialized to true anyway to avoid repeated initialization attempts
+      this.initialized = true;
+    }
+  }
+
+  /**
+   * Ensure the service is initialized before use
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) return;
+    if (this.initPromise) {
+      await this.initPromise;
+    } else {
+      this.initPromise = this.initialize();
+      await this.initPromise;
+    }
   }
 
   /**
@@ -182,8 +242,7 @@ export class SearchService {
     // Don't save empty queries
     if (!query.trim()) return;
 
-    // Ensure recent searches are loaded
-    await this.loadRecentSearches();
+    await this.ensureInitialized();
 
     // Remove if already exists (to move to front)
     this.recentSearches = this.recentSearches.filter(
@@ -216,7 +275,7 @@ export class SearchService {
    * @returns Array of recent search terms
    */
   public async getRecentSearches(): Promise<string[]> {
-    await this.loadRecentSearches();
+    await this.ensureInitialized();
     return [...this.recentSearches];
   }
 
@@ -224,6 +283,7 @@ export class SearchService {
    * Clear recent searches
    */
   public async clearRecentSearches(): Promise<void> {
+    await this.ensureInitialized();
     this.recentSearches = [];
     await userPreferencesService.setRecentSearches([]);
   }
@@ -262,8 +322,7 @@ export class SearchService {
    * @returns Array of command matches with scores
    */
   public async searchCommands(query: string): Promise<CommandMatch[]> {
-    // Ensure aliases are loaded
-    await this.loadCommandAliases();
+    await this.ensureInitialized();
 
     // If query is empty, return all available commands
     if (!query.trim()) {
@@ -547,6 +606,8 @@ export class SearchService {
     input?: string,
     saveHistory: boolean = true,
   ): Promise<void> {
+    await this.ensureInitialized();
+
     if (!command || typeof command.execute !== "function") {
       errorService.logError(
         "Invalid command or missing execute method",
@@ -588,6 +649,8 @@ export class SearchService {
     limit = 5,
     ensureLoaded = true,
   ): Promise<PipelineSuggestion[]> {
+    await this.ensureInitialized();
+
     // Return empty results for empty search term
     if (!query.trim()) {
       return [];
@@ -680,6 +743,8 @@ export class SearchService {
    * @returns Promise resolving to array of pipelines
    */
   public async getFavoritePipelines(limit?: number): Promise<Pipeline[]> {
+    await this.ensureInitialized();
+
     try {
       // Ensure pipelines are loaded
       await pipelineService.ensurePipelinesLoaded();
@@ -728,6 +793,8 @@ export class SearchService {
    * @returns Promise resolving to array of pipelines
    */
   public async getRecentPipelines(limit?: number): Promise<Pipeline[]> {
+    await this.ensureInitialized();
+
     try {
       // Ensure pipelines are loaded
       await pipelineService.ensurePipelinesLoaded();
@@ -775,6 +842,8 @@ export class SearchService {
    * @returns Array of favorite Command objects
    */
   public async getFavoriteCommands(): Promise<Command[]> {
+    await this.ensureInitialized();
+
     try {
       const favoriteIds = await userPreferencesService.getFavoriteCommands();
       const commands: Command[] = [];
@@ -807,6 +876,8 @@ export class SearchService {
   public async getRecentCommands(
     limit?: number,
   ): Promise<Array<{ command: Command; useCount: number }>> {
+    await this.ensureInitialized();
+
     try {
       const recentCommandsData =
         await userPreferencesService.getRecentCommands();
@@ -844,3 +915,6 @@ export class SearchService {
     this.pipelineSearchCache.clear();
   }
 }
+
+// Export the singleton accessor
+export const searchService = SearchService.getInstance();
