@@ -35,23 +35,38 @@ export interface MainModeProps {
   onPipelineSelect: (pipeline: Pipeline) => void;
   onOpenAliasManager?: () => void;
   onKeyDown?: (e: React.KeyboardEvent) => void;
+
+  // Additional properties
+  resultsContainerRef?: RefObject<HTMLDivElement>;
+  onClose?: () => void;
 }
 
 /**
  * Main mode screen for searching commands and pipelines
  */
 export const MainMode: React.FC<MainModeProps> = ({
+  input,
+  onInputChange,
+  onInputChangeImmediate,
+  isSearching,
   commandMatches,
   pipelineSuggestions,
-  inputValue,
-  onInputChange,
+  selectedIndex,
+  selectedSection,
+  onIndexChange,
+  onSectionChange,
   onCommandSelect,
   onPipelineSelect,
-  onClose,
+  onOpenAliasManager,
+  onKeyDown,
+  inputRef: externalInputRef,
   resultsContainerRef,
-  onAliasManager,
+  onClose,
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const localInputRef = useRef<HTMLInputElement>(null);
+
+  // Use provided inputRef or fallback to local ref
+  const inputRef = externalInputRef || localInputRef;
 
   // State for recent/favorite command sections
   const [recentCommandsCount, setRecentCommandsCount] = useState(0);
@@ -62,10 +77,10 @@ export const MainMode: React.FC<MainModeProps> = ({
     if (inputRef.current) {
       inputRef.current.focus();
     }
-  }, []);
+  }, [inputRef]);
 
   // Determine whether to show recent/favorites based on input
-  const showRecentsAndFavorites = !inputValue.trim();
+  const showRecentsAndFavorites = !input.trim();
 
   // Setup keyboard navigation
   const keyboardNavigation = useKeyboardNavigation({
@@ -129,9 +144,7 @@ export const MainMode: React.FC<MainModeProps> = ({
         items: commandMatches.map((match) => match.command),
         // Fix: Match the correct signature expected by KeyboardNavigationSection
         onItemSelect: (command) => {
-          // Find the original command match to get any inputParams
-          const match = commandMatches.find((m) => m.command === command);
-          onCommandSelect(command, match?.inputParams);
+          onCommandSelect(command);
         },
       },
       {
@@ -143,17 +156,17 @@ export const MainMode: React.FC<MainModeProps> = ({
     onEscape: onClose,
     onBackspace: (isEmpty: boolean) => {
       if (isEmpty) {
-        onClose();
+        onClose?.();
       }
     },
     containerRef: resultsContainerRef,
     inputRef: inputRef,
     shouldScrollToSelected: true,
     // Add custom key handler for alias manager
-    customKeyHandlers: onAliasManager
+    customKeyHandlers: onOpenAliasManager
       ? {
           F2: () => {
-            onAliasManager();
+            onOpenAliasManager();
             return true;
           },
         }
@@ -191,9 +204,9 @@ export const MainMode: React.FC<MainModeProps> = ({
   return (
     <>
       <CommandInput
-        value={inputValue}
+        value={input}
         onChange={onInputChange}
-        onKeyDown={keyboardNavigation.handleKeyDown}
+        onKeyDown={onKeyDown || keyboardNavigation.handleKeyDown}
         inputRef={inputRef}
       />
 
@@ -202,20 +215,20 @@ export const MainMode: React.FC<MainModeProps> = ({
         {showRecentsAndFavorites && (
           <>
             <FavoriteCommandsSection
-              selectedIndex={keyboardNavigation.selectedIndex}
+              selectedIndex={selectedIndex}
               startIndex={getSectionStartIndex("favoriteCommands")}
               onCommandSelect={onCommandSelect}
               onSelectionChange={handleFavoriteCommandsCountChange}
             />
 
             <RecentCommandsSection
-              selectedIndex={keyboardNavigation.selectedIndex}
+              selectedIndex={selectedIndex}
               startIndex={getSectionStartIndex("recentCommands")}
               onCommandSelect={onCommandSelect}
               onSelectionChange={handleRecentCommandsCountChange}
             />
 
-            {onAliasManager && (
+            {onOpenAliasManager && (
               <div className="cmd-k-alias-manager-tip">
                 Press <kbd>F2</kbd> to manage command aliases
               </div>
@@ -225,23 +238,21 @@ export const MainMode: React.FC<MainModeProps> = ({
 
         <CommandResults
           commands={commandMatches}
-          selectedIndex={keyboardNavigation.selectedIndex}
+          selectedIndex={selectedIndex}
           onCommandSelect={onCommandSelect}
           sectionStartIndex={getSectionStartIndex("commands")}
         />
 
         <PipelineResults
           pipelines={pipelineSuggestions}
-          selectedIndex={keyboardNavigation.selectedIndex}
+          selectedIndex={selectedIndex}
           sectionStartIndex={getSectionStartIndex("pipelines")}
           onPipelineSelect={onPipelineSelect}
         />
 
-        {inputValue &&
-          !commandMatches.length &&
-          !pipelineSuggestions.length && (
-            <div className="cmd-k-empty-state">No matching results found</div>
-          )}
+        {input && !commandMatches.length && !pipelineSuggestions.length && (
+          <div className="cmd-k-empty-state">No matching results found</div>
+        )}
       </div>
     </>
   );

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, RefObject } from "react";
+import React, { useRef, useEffect, useState, RefObject } from "react";
 import { Command, Pipeline, PipelineSuggestion } from "../../types";
 import { CommandInput } from "../CommandInput";
 import { PipelineResults } from "../PipelineResults";
@@ -17,6 +17,7 @@ export interface CommandModeProps {
   onBack: () => void;
   onKeyDown?: (e: React.KeyboardEvent) => void;
   inputRef?: RefObject<HTMLInputElement>;
+  resultsContainerRef?: RefObject<HTMLDivElement>;
 }
 
 /**
@@ -24,26 +25,34 @@ export interface CommandModeProps {
  */
 export const CommandMode: React.FC<CommandModeProps> = ({
   command,
-  onBack,
-  onExecute,
-  inputValue,
+  input,
   onInputChange,
+  isSearching,
   pipelineSuggestions,
+  selectedIndex,
+  onIndexChange,
+  onPipelineSelect,
+  onExecute,
+  onBack,
+  onKeyDown,
+  inputRef: externalInputRef,
   resultsContainerRef,
 }) => {
   const commandInputRef = useRef<HTMLInputElement>(null);
 
+  // Use provided inputRef or fallback to local ref
+  const inputRef = externalInputRef || commandInputRef;
+
   // Focus input when component mounts
   useEffect(() => {
-    if (commandInputRef.current) {
-      commandInputRef.current.focus();
+    if (inputRef.current) {
+      inputRef.current.focus();
     }
-  }, [command]);
+  }, [command, inputRef]);
 
   // Handle pipeline selection
   const handlePipelineSelect = (pipeline: Pipeline) => {
-    const pipelineString = `${pipeline.organization}/${pipeline.slug}`;
-    onExecute(command, pipelineString);
+    onPipelineSelect(pipeline);
   };
 
   // Setup keyboard navigation
@@ -62,7 +71,7 @@ export const CommandMode: React.FC<CommandModeProps> = ({
       }
     },
     containerRef: resultsContainerRef,
-    inputRef: commandInputRef,
+    inputRef: inputRef,
     shouldScrollToSelected: true,
   });
 
@@ -82,9 +91,9 @@ export const CommandMode: React.FC<CommandModeProps> = ({
       </div>
 
       <CommandInput
-        value={inputValue}
+        value={input}
         onChange={onInputChange}
-        onKeyDown={keyboardNavigation.handleKeyDown}
+        onKeyDown={onKeyDown || keyboardNavigation.handleKeyDown}
         placeholder={
           command.id === "pipeline"
             ? "Search pipelines..."
@@ -92,7 +101,7 @@ export const CommandMode: React.FC<CommandModeProps> = ({
               ? "Search pipelines to create a build..."
               : "Enter parameters..."
         }
-        inputRef={commandInputRef}
+        inputRef={inputRef}
         className="cmd-k-input cmd-k-command-input"
       />
 
@@ -100,7 +109,7 @@ export const CommandMode: React.FC<CommandModeProps> = ({
         <div ref={resultsContainerRef} className="cmd-k-results">
           <PipelineResults
             pipelines={pipelineSuggestions}
-            selectedIndex={keyboardNavigation.selectedIndex}
+            selectedIndex={selectedIndex}
             sectionStartIndex={0}
             onPipelineSelect={handlePipelineSelect}
             title="Pipelines"
@@ -109,7 +118,7 @@ export const CommandMode: React.FC<CommandModeProps> = ({
         </div>
       )}
 
-      {inputValue && !pipelineSuggestions.length && (
+      {input && !pipelineSuggestions.length && (
         <div className="cmd-k-empty-state">No matching pipelines found</div>
       )}
     </>
