@@ -816,6 +816,304 @@ html[data-theme="dark"] {
     color: #666;
 }
 
+/* Command use count styling */
+.cmd-k-command-use-count {
+    font-size: 12px;
+    color: var(--cmd-k-text-tertiary);
+    margin-left: 4px;
+}
+
+/* Command alias badge */
+.cmd-k-command-alias-badge {
+    display: inline-block;
+    background: var(--cmd-k-accent-tertiary);
+    color: var(--cmd-k-text-primary);
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: var(--cmd-k-radius-small);
+    margin-left: 8px;
+    font-weight: normal;
+    vertical-align: middle;
+}
+
+/* Default parameters display */
+.cmd-k-command-params {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--cmd-k-accent-secondary);
+}
+
+.cmd-k-command-params code {
+    background: var(--cmd-k-bg-tertiary);
+    padding: 2px 4px;
+    border-radius: var(--cmd-k-radius-small);
+    font-family: monospace;
+}
+
+/* Command actions container */
+.cmd-k-command-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* F2 shortcut tip */
+.cmd-k-alias-manager-tip {
+    text-align: center;
+    padding: 6px;
+    color: var(--cmd-k-text-tertiary);
+    font-size: 12px;
+    margin: 4px 0 12px 0;
+    background: var(--cmd-k-bg-tertiary);
+    border-radius: var(--cmd-k-radius-small);
+}
+
+.cmd-k-alias-manager-tip kbd {
+    background: var(--cmd-k-bg-secondary);
+    border: 1px solid var(--cmd-k-border-primary);
+    border-radius: 3px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+    padding: 1px 4px;
+    margin: 0 2px;
+    font-family: monospace;
+    font-size: 11px;
+}
+
+/* Alias manager */
+.cmd-k-alias-manager {
+    padding: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.cmd-k-alias-manager-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 0 12px 0;
+    border-bottom: 1px solid var(--cmd-k-border-secondary);
+    margin-bottom: 16px;
+}
+
+.cmd-k-alias-manager-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--cmd-k-text-primary);
+}
+
+.cmd-k-close-button {
+    background: none;
+    border: none;
+    color: var(--cmd-k-text-secondary);
+    font-size: 20px;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.cmd-k-close-button:hover {
+    background: var(--cmd-k-bg-tertiary);
+    color: var(--cmd-k-text-primary);
+}
+
+.cmd-k-alias-manager-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 0 12px 0;
+}
+
+.cmd-k-empty-aliases {
+    text-align: center;
+    padding: 20px;
+    color: var(--cmd-k-text-secondary);
+}
+
+.cmd-k-alias-actions {
+    margin-top: 16px;
+    display: flex;
+    justify-content: center;
+}
+
+/* Alias table */
+.cmd-k-alias-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.cmd-k-alias-table th {
+    text-align: left;
+    padding: 8px;
+    font-weight: 600;
+    color: var(--cmd-k-text-primary);
+    border-bottom: 1px solid var(--cmd-k-border-primary);
+}
+
+.cmd-k-alias-table td {
+    padding: 8px;
+    border-bottom: 1px solid var(--cmd-k-border-secondary);
+    color: var(--cmd-k-text-secondary);
+}
+
+.cmd-k-alias-name {
+    font-family: monospace;
+    font-weight: 500;
+    color: var(--cmd-k-text-primary) !important;
+}
+
+.cmd-k-alias-delete {
+    background: none;
+    border: none;
+    color: var(--cmd-k-error);
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: var(--cmd-k-radius-small);
+    font-size: 12px;
+}
+
+.cmd-k-alias-delete:hover {
+    background: rgba(220, 38, 38, 0.1);
+}
+
+/* Alias form */
+.cmd-k-alias-form {
+    background: var(--cmd-k-bg-secondary);
+    border-radius: var(--cmd-k-radius-medium);
+    padding: 16px;
+    margin-top: 20px;
+}
+
+.cmd-k-alias-form h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--cmd-k-text-primary);
+}
+
+.cmd-k-form-group {
+    margin-bottom: 16px;
+}
+
+.cmd-k-form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--cmd-k-text-primary);
+}
+
+.cmd-k-form-group input,
+.cmd-k-form-group select,
+.cmd-k-form-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--cmd-k-border-primary);
+    border-radius: var(--cmd-k-radius-small);
+    background: var(--cmd-k-bg-primary);
+    color: var(--cmd-k-text-primary);
+    font-size: 14px;
+}
+
+.cmd-k-form-group .cmd-k-input-error {
+    border-color: var(--cmd-k-error);
+}
+
+.cmd-k-form-error {
+    color: var(--cmd-k-error);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.cmd-k-form-help {
+    font-size: 12px;
+    color: var(--cmd-k-text-tertiary);
+    margin-top: 4px;
+}
+
+.cmd-k-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+/* Buttons */
+.cmd-k-btn-primary {
+    background: var(--cmd-k-accent-primary);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: var(--cmd-k-radius-small);
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.cmd-k-btn-primary:hover {
+    background: var(--cmd-k-accent-secondary);
+}
+
+.cmd-k-btn-secondary {
+    background: var(--cmd-k-bg-tertiary);
+    color: var(--cmd-k-text-primary);
+    border: 1px solid var(--cmd-k-border-primary);
+    padding: 7px 14px;
+    border-radius: var(--cmd-k-radius-small);
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.cmd-k-btn-secondary:hover {
+    background: var(--cmd-k-bg-hover);
+}
+
+/* Header with app title and theme toggle */
+.cmd-k-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.cmd-k-header-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--cmd-k-text-primary);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .cmd-k-alias-table th:nth-child(3),
+    .cmd-k-alias-table td:nth-child(3),
+    .cmd-k-alias-table th:nth-child(4),
+    .cmd-k-alias-table td:nth-child(4) {
+        display: none; /* Hide params and description columns on small screens */
+    }
+
+    .cmd-k-alias-form {
+        padding: 12px;
+    }
+
+    .cmd-k-form-group input,
+    .cmd-k-form-group select,
+    .cmd-k-form-group textarea {
+        padding: 6px;
+        font-size: 13px;
+    }
+
+    .cmd-k-btn-primary,
+    .cmd-k-btn-secondary {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+}
+
 @media (prefers-color-scheme: dark) {
     .cmd-k-error-toast-close {
         color: #777;

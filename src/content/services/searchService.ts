@@ -1,8 +1,9 @@
 import { Command, CommandMatch, Pipeline, PipelineSuggestion } from "../types";
 import { fuzzyMatch, enhancedFuzzySearch } from "../util/search";
-import { userPreferencesService } from "./preferences";
+import { userPreferencesService, CommandAlias } from "../services/preferences";
 import { pipelineService } from "./pipelineService";
 import { CommandManager } from "./commandManager";
+import { errorService, ErrorCategory, ErrorSeverity } from "./errorService";
 
 /**
  * Maximum number of recent searches to store
@@ -17,6 +18,8 @@ export class SearchService {
   private commandManager: CommandManager;
   private recentSearches: string[] = [];
   private recentSearchesLoaded = false;
+  private commandAliases: CommandAlias[] = [];
+  private aliasesLoaded = false;
 
   constructor(commandManager?: CommandManager) {
     // Use dependency injection with a fallback
@@ -24,6 +27,38 @@ export class SearchService {
 
     // Wrap initialization in a try-catch to prevent breaking tests
     this.loadRecentSearches().catch(console.error);
+
+    // Load command aliases
+    this.loadCommandAliases().catch(console.error);
+  }
+
+  /**
+   * Load command aliases from user preferences
+   */
+  private async loadCommandAliases(): Promise<void> {
+    try {
+      if (this.aliasesLoaded) return;
+
+      const aliases = await userPreferencesService.getCommandAliases();
+      this.commandAliases = aliases || [];
+      this.aliasesLoaded = true;
+    } catch (error) {
+      errorService.captureException(error, {
+        message: "Failed to load command aliases",
+        severity: ErrorSeverity.WARNING,
+        category: ErrorCategory.INITIALIZATION,
+      });
+      this.commandAliases = [];
+      this.aliasesLoaded = true;
+    }
+  }
+
+  /**
+   * Reload command aliases (called after alias changes)
+   */
+  public async refreshCommandAliases(): Promise<void> {
+    this.aliasesLoaded = false;
+    await this.loadCommandAliases();
   }
 
   /**
@@ -39,7 +74,11 @@ export class SearchService {
       this.recentSearches = prefs || [];
       this.recentSearchesLoaded = true;
     } catch (error) {
-      console.error("Failed to load recent searches:", error);
+      errorService.captureException(error, {
+        message: "Failed to load recent searches",
+        severity: ErrorSeverity.WARNING,
+        category: ErrorCategory.INITIALIZATION,
+      });
       this.recentSearches = [];
       this.recentSearchesLoaded = true;
     }
@@ -74,7 +113,11 @@ export class SearchService {
     try {
       await userPreferencesService.setRecentSearches(this.recentSearches);
     } catch (error) {
-      console.error("Failed to save recent searches:", error);
+      errorService.captureException(error, {
+        message: "Failed to save recent searches",
+        severity: ErrorSeverity.WARNING,
+        category: ErrorCategory.STORAGE,
+      });
     }
   }
 
@@ -97,112 +140,176 @@ export class SearchService {
   }
 
   /**
-   * Search for commands that match the given query
+   * Search for commands (and aliases) that match the given query
    *
-   * @param query The search term
-   * @returns Array of command matches sorted by relevance
+   * @param query User input to match against commands and aliases
+   * @returns Array of command matches with scores
    */
-  public searchCommands(query: string): CommandMatch[] {
+  public async searchCommands(query: string): Promise<CommandMatch[]> {
+    // Ensure aliases are loaded
+    await this.loadCommandAliases();
+
     // If query is empty, return all available commands
     if (!query.trim()) {
-      return this.commandManager.getAllAvailableCommands().map((command) => ({
-        command,
+      return this.commandManager.getAllAvailableCommands().map((cmd) => ({
+        command: cmd,
         score: 1,
       }));
     }
 
-    // Check if it's a direct command reference with slash
-    if (query.startsWith("/")) {
-      const commandId = query.slice(1);
-      const directMatches = this.commandManager
-        .getAllAvailableCommands()
-        .filter((cmd) => cmd.id === commandId)
-        .map((cmd) => ({ command: cmd, score: 100 }));
+    const inputLower = query.toLowerCase().trim();
+    let results: CommandMatch[] = [];
 
-      if (directMatches.length > 0) {
-        return directMatches;
+    // Check if it's a direct command or alias reference with slash
+    if (inputLower.startsWith("/")) {
+      const identifier = inputLower.slice(1).split(/\s+/)[0]; // Get the first word after slash
+
+      // First check for alias match
+      const aliasMatch = this.commandAliases.find(
+        (alias) => alias.name.toLowerCase() === identifier,
+      );
+
+      if (aliasMatch) {
+        const command = this.commandManager.getCommandById(
+          aliasMatch.commandId,
+        );
+
+        if (command && (!command.isAvailable || command.isAvailable())) {
+          return [
+            {
+              command,
+              score: 100,
+              // Include alias details so we know this was matched via an alias
+              alias: aliasMatch,
+              // Extract any additional input after the alias
+              inputParams: query
+                .trim()
+                .slice(identifier.length + 1)
+                .trim(),
+            },
+          ];
+        }
+      }
+
+      // Then check for direct command match
+      const command = this.commandManager.getCommandById(identifier);
+      if (command && (!command.isAvailable || command.isAvailable())) {
+        return [
+          {
+            command,
+            score: 100,
+            // Extract any additional input after the command ID
+            inputParams: query
+              .trim()
+              .slice(identifier.length + 1)
+              .trim(),
+          },
+        ];
       }
     }
 
-    // Split input for more advanced matching patterns
-    const queryLower = query.toLowerCase().trim();
-    const words = queryLower.split(/\s+/);
-    const firstWord = words[0];
+    // For non-exact matches, search both commands and aliases
+    const commands = this.commandManager.getAllAvailableCommands();
 
-    return this.commandManager
-      .getAllAvailableCommands()
-      .map((command) => ({
-        command,
-        score: this.calculateCommandMatchScore(
-          queryLower,
-          firstWord,
-          words,
-          command,
-        ),
+    // Score and filter commands
+    const commandMatches = commands
+      .map((cmd) => ({
+        command: cmd,
+        score: this.calculateCommandMatchScore(inputLower, cmd),
       }))
-      .filter((match) => match.score > 0)
-      .sort((a, b) => b.score - a.score);
+      .filter((match) => match.score > 0);
+
+    // Score and filter aliases
+    const aliasMatches = this.commandAliases
+      .filter((alias) => {
+        // Only include aliases for commands that exist and are available
+        const cmd = this.commandManager.getCommandById(alias.commandId);
+        return cmd && (!cmd.isAvailable || cmd.isAvailable());
+      })
+      .map((alias) => {
+        // Get the actual command this alias refers to
+        const command = this.commandManager.getCommandById(alias.commandId);
+        if (!command) return null;
+
+        // Calculate match score for the alias
+        let score = 0;
+
+        // Direct alias name match (highest priority)
+        if (alias.name.toLowerCase() === inputLower) {
+          score = 95; // Just below exact command match
+        }
+        // Alias starts with input
+        else if (alias.name.toLowerCase().startsWith(inputLower)) {
+          score = 85;
+        }
+        // Alias contains input
+        else if (alias.name.toLowerCase().includes(inputLower)) {
+          score = 75;
+        }
+        // Check custom description if available
+        else if (
+          alias.description &&
+          alias.description.toLowerCase().includes(inputLower)
+        ) {
+          score = 65;
+        }
+
+        return score > 0
+          ? {
+              command,
+              score,
+              alias,
+              // Add any default params defined for this alias
+              inputParams: alias.params || "",
+            }
+          : null;
+      })
+      .filter((match): match is CommandMatch => match !== null);
+
+    // Combine matches and sort by score
+    results = [...commandMatches, ...aliasMatches].sort(
+      (a, b) => b.score - a.score,
+    );
+
+    return results;
   }
 
   /**
-   * Execute a specific command
+   * Calculate a match score between the input and a command
    *
-   * @param command The command to execute
-   * @param input Optional input parameters for the command
+   * @param input The search input
+   * @param command The command to score against
+   * @returns Score indicating match quality
    */
-  public executeCommand(command: Command, input?: string): void {
-    if (!command || typeof command.execute !== "function") {
-      console.error("Invalid command or missing execute method");
-      return;
-    }
-
-    try {
-      command.execute(input);
-    } catch (error) {
-      console.error("Error executing command:", error);
-    }
-  }
-
-  /**
-   * Calculate a match score between a query and a command
-   *
-   * @param fullInput The full search query
-   * @param firstWord The first word of the query
-   * @param words All words in the query
-   * @param command The command to score
-   * @returns A number indicating the quality of the match
-   */
-  private calculateCommandMatchScore(
-    fullInput: string,
-    firstWord: string,
-    words: string[],
-    command: Command,
-  ): number {
+  private calculateCommandMatchScore(input: string, command: Command): number {
+    const words = input.split(/\s+/);
+    const firstWord = words[0];
     let score = 0;
+
     const commandIdLower = command.id.toLowerCase();
     const commandNameLower = command.name.toLowerCase();
     const descriptionLower = command.description.toLowerCase();
 
     // Direct matches are highest priority
-    if (commandIdLower === fullInput) {
+    if (commandIdLower === input) {
       return 100;
     }
 
-    if (commandNameLower === fullInput) {
+    if (commandNameLower === input) {
       return 90;
     }
 
     // Command ID partial matches
-    if (commandIdLower.startsWith(fullInput)) {
+    if (commandIdLower.startsWith(input)) {
       score += 70;
-    } else if (commandIdLower.includes(fullInput)) {
+    } else if (commandIdLower.includes(input)) {
       score += 60;
     }
 
     // Command name matches
-    if (commandNameLower.startsWith(fullInput)) {
+    if (commandNameLower.startsWith(input)) {
       score += 50;
-    } else if (commandNameLower.includes(fullInput)) {
+    } else if (commandNameLower.includes(input)) {
       score += 40;
     }
 
@@ -237,21 +344,61 @@ export class SearchService {
     score += wordMatchCount * 10;
 
     // Keyword exact matches
-    if (command.keywords.some((k) => k.toLowerCase() === fullInput)) {
+    if (command.keywords.some((k) => k.toLowerCase() === input)) {
       score += 30;
     }
 
     // Keyword partial matches
-    if (command.keywords.some((k) => k.toLowerCase().includes(fullInput))) {
+    if (command.keywords.some((k) => k.toLowerCase().includes(input))) {
       score += 20;
     }
 
     // Description matches (lowest priority)
-    if (descriptionLower.includes(fullInput)) {
+    if (descriptionLower.includes(input)) {
       score += 10;
     }
 
     return score;
+  }
+
+  /**
+   * Execute a command with optional input
+   *
+   * @param command The command to execute
+   * @param input Optional input parameters
+   * @param saveHistory Whether to save this to command history
+   */
+  public async executeCommand(
+    command: Command,
+    input?: string,
+    saveHistory: boolean = true,
+  ): Promise<void> {
+    if (!command || typeof command.execute !== "function") {
+      errorService.logError(
+        "Invalid command or missing execute method",
+        ErrorSeverity.ERROR,
+        ErrorCategory.COMMAND,
+        { commandId: command?.id },
+      );
+      return;
+    }
+
+    try {
+      // Only record history for successful command executions
+      if (saveHistory) {
+        await userPreferencesService.addRecentCommand(command.id);
+      }
+
+      // Execute the actual command
+      command.execute(input);
+    } catch (error) {
+      errorService.captureException(error, {
+        message: `Error executing command: ${command.id}`,
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.COMMAND,
+        context: { commandId: command.id, input },
+      });
+    }
   }
 
   /**
@@ -282,7 +429,12 @@ export class SearchService {
       try {
         await pipelineService.fetchPipelines();
       } catch (error) {
-        console.error("Error fetching pipelines:", error);
+        errorService.captureException(error, {
+          message: "Error fetching pipelines during search",
+          severity: ErrorSeverity.ERROR,
+          category: ErrorCategory.PIPELINE,
+          context: { query },
+        });
         return [];
       }
     }
@@ -364,7 +516,11 @@ export class SearchService {
 
       return limit ? favoriteItems.slice(0, limit) : favoriteItems;
     } catch (error) {
-      console.error("Error loading favorite pipelines:", error);
+      errorService.captureException(error, {
+        message: "Error loading favorite pipelines",
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.PIPELINE,
+      });
       return [];
     }
   }
@@ -408,7 +564,78 @@ export class SearchService {
 
       return limit ? recentItems.slice(0, limit) : recentItems;
     } catch (error) {
-      console.error("Error loading recent pipelines:", error);
+      errorService.captureException(error, {
+        message: "Error loading recent pipelines",
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.PIPELINE,
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Get favorite commands
+   *
+   * @returns Array of favorite Command objects
+   */
+  public async getFavoriteCommands(): Promise<Command[]> {
+    try {
+      const favoriteIds = await userPreferencesService.getFavoriteCommands();
+      const commands: Command[] = [];
+
+      for (const commandId of favoriteIds) {
+        const command = this.commandManager.getCommandById(commandId);
+
+        if (command && (!command.isAvailable || command.isAvailable())) {
+          commands.push(command);
+        }
+      }
+
+      return commands;
+    } catch (error) {
+      errorService.captureException(error, {
+        message: "Error loading favorite commands",
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.COMMAND,
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Get recent commands
+   *
+   * @param limit Maximum number of recent commands to return
+   * @returns Array of {command, useCount} objects
+   */
+  public async getRecentCommands(
+    limit?: number,
+  ): Promise<Array<{ command: Command; useCount: number }>> {
+    try {
+      const recentCommandsData =
+        await userPreferencesService.getRecentCommands();
+      const commands: Array<{ command: Command; useCount: number }> = [];
+
+      for (const commandData of recentCommandsData) {
+        const command = this.commandManager.getCommandById(
+          commandData.commandId,
+        );
+
+        if (command && (!command.isAvailable || command.isAvailable())) {
+          commands.push({
+            command,
+            useCount: commandData.useCount,
+          });
+        }
+      }
+
+      return limit ? commands.slice(0, limit) : commands;
+    } catch (error) {
+      errorService.captureException(error, {
+        message: "Error loading recent commands",
+        severity: ErrorSeverity.ERROR,
+        category: ErrorCategory.COMMAND,
+      });
       return [];
     }
   }

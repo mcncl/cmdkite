@@ -10,6 +10,8 @@ export interface Command {
 export interface CommandMatch {
   command: Command;
   score: number;
+  alias?: CommandAlias;
+  inputParams?: string;
 }
 
 export interface Pipeline {
@@ -30,4 +32,12 @@ export interface PipelineSuggestion {
 export interface CommandBoxProps {
   onClose?: () => void;
   isVisible?: boolean;
+}
+
+export interface CommandAlias {
+  id: string;
+  name: string;
+  commandId: string;
+  params?: string;
+  description?: string;
 }

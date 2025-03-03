@@ -11,8 +11,10 @@ import type {
 } from "../../types";
 import { MainMode } from "../MainMode";
 import { CommandMode } from "../CommandMode";
+import { CommandAliasManager } from "../CommandAliasManager";
+import { useErrorHandler } from "../../hooks";
 
-type ViewMode = "main" | "command";
+type ViewMode = "main" | "command" | "alias-manager";
 
 /**
  * CommandBox component that provides a command palette interface
@@ -32,6 +34,9 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   >([]);
   const [commandMatches, setCommandMatches] = useState<CommandMatch[]>([]);
 
+  // Error handling
+  const { handleError } = useErrorHandler();
+
   // Refs
   const boxRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -50,12 +55,17 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
 
   // Memoized handlers
   const executeCommand = useCallback(
-    (command: Command, input?: string) => {
+    async (command: Command, input?: string) => {
       if (!command) return;
-      searchService.executeCommand(command, input);
-      onClose?.();
+
+      try {
+        await searchService.executeCommand(command, input);
+        onClose?.();
+      } catch (error) {
+        handleError(error, `Failed to execute command: ${command.id}`);
+      }
     },
-    [onClose],
+    [onClose, handleError],
   );
 
   const enterCommandMode = useCallback((command: Command) => {
@@ -70,17 +80,34 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     setCommandSubInput("");
   }, []);
 
-  const handlePipelineSelect = useCallback((pipeline: Pipeline) => {
-    if (!pipeline) return;
-
-    userPreferencesService
-      .addRecentPipeline(pipeline.organization, pipeline.slug)
-      .catch((error) => {
-        console.error("Failed to add recent pipeline:", error);
-      });
-
-    window.location.href = `https://buildkite.com/${pipeline.organization}/${pipeline.slug}`;
+  const handleOpenAliasManager = useCallback(() => {
+    setViewMode("alias-manager");
   }, []);
+
+  const handleCloseAliasManager = useCallback(async () => {
+    // Refresh command aliases when returning from alias manager
+    setViewMode("main");
+    try {
+      await searchService.refreshCommandAliases();
+    } catch (error) {
+      handleError(error, "Failed to refresh command aliases");
+    }
+  }, [handleError]);
+
+  const handlePipelineSelect = useCallback(
+    (pipeline: Pipeline) => {
+      if (!pipeline) return;
+
+      userPreferencesService
+        .addRecentPipeline(pipeline.organization, pipeline.slug)
+        .catch((error) => {
+          handleError(error, "Failed to add recent pipeline");
+        });
+
+      window.location.href = `https://buildkite.com/${pipeline.organization}/${pipeline.slug}`;
+    },
+    [handleError],
+  );
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,9 +126,14 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
   // Enhanced pipeline search function
   const searchPipelines = useCallback(
     async (searchTerm: string, limit: number = 5) => {
-      return searchService.searchPipelines(searchTerm, limit);
+      try {
+        return await searchService.searchPipelines(searchTerm, limit);
+      } catch (error) {
+        handleError(error, "Failed to search pipelines");
+        return [];
+      }
     },
-    [],
+    [handleError],
   );
 
   // Update suggestions/commands when input changes in main view
@@ -111,23 +143,38 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     // Always show commands when box first opens with empty input
     if (!input.trim()) {
       setPipelineSuggestions([]);
-      setCommandMatches(searchService.searchCommands(""));
+      // Use async function to search commands with alias support
+      const fetchCommands = async () => {
+        try {
+          // Fix: Store results in a variable first, then update state
+          const matches = await searchService.searchCommands("");
+          setCommandMatches(matches);
+        } catch (error) {
+          handleError(error, "Failed to search commands");
+          setCommandMatches([]);
+        }
+      };
+
+      fetchCommands();
       return;
     }
 
     // Debounce expensive search operations
     const handler = setTimeout(async () => {
-      // Get matching commands using searchService
-      const matches = searchService.searchCommands(input);
-      setCommandMatches(matches);
+      try {
+        // Fix: Store results in variables first, then update state
+        const matches = await searchService.searchCommands(input);
+        setCommandMatches(matches);
 
-      // Search for pipelines using the searchService
-      const pipelineMatches = await searchPipelines(input);
-      setPipelineSuggestions(pipelineMatches);
+        const pipelineMatches = await searchPipelines(input);
+        setPipelineSuggestions(pipelineMatches);
+      } catch (error) {
+        handleError(error, "Failed to search");
+      }
     }, 120);
 
     return () => clearTimeout(handler);
-  }, [input, viewMode, searchPipelines]);
+  }, [input, viewMode, searchPipelines, handleError]);
 
   // Update pipeline suggestions in command mode
   useEffect(() => {
@@ -150,20 +197,24 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
             setPipelineSuggestions(recentPipelineSuggestions);
           }
         })
-        .catch(console.error);
+        .catch((error) => handleError(error, "Failed to get recent pipelines"));
       return;
     }
 
     // Debounce search operations
     const handler = setTimeout(async () => {
       if (activeCommand.id === "pipeline" || activeCommand.id === "new-build") {
-        const matches = await searchPipelines(commandSubInput, 7);
-        setPipelineSuggestions(matches);
+        try {
+          const matches = await searchPipelines(commandSubInput, 7);
+          setPipelineSuggestions(matches);
+        } catch (error) {
+          handleError(error, "Failed to search pipelines");
+        }
       }
     }, 100);
 
     return () => clearTimeout(handler);
-  }, [commandSubInput, viewMode, activeCommand, searchPipelines]);
+  }, [commandSubInput, viewMode, activeCommand, searchPipelines, handleError]);
 
   // Handle click outside to close
   useEffect(() => {
@@ -183,14 +234,14 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
 
   // Handle command selection
   const handleCommandSelect = useCallback(
-    (command: Command) => {
+    (command: Command, params?: string) => {
       if (command.id === "pipeline" || command.id === "new-build") {
         enterCommandMode(command);
       } else {
-        executeCommand(command, input.split(" ").slice(1).join(" "));
+        executeCommand(command, params);
       }
     },
-    [enterCommandMode, executeCommand, input],
+    [enterCommandMode, executeCommand],
   );
 
   // Only render the component when it's visible
@@ -201,18 +252,12 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
     <div className="cmd-k-wrapper visible">
       <div ref={boxRef} className="cmd-k-box">
         {/* Header with theme toggle */}
-        <div
-          className="cmd-k-header"
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            marginBottom: "10px",
-          }}
-        >
+        <div className="cmd-k-header">
+          <div className="cmd-k-header-title">CMDKite</div>
           <ThemeToggle showLabel={false} />
         </div>
 
-        {viewMode === "main" ? (
+        {viewMode === "main" && (
           <MainMode
             commandMatches={commandMatches}
             pipelineSuggestions={pipelineSuggestions}
@@ -222,19 +267,24 @@ export const CommandBox: React.FC<CommandBoxProps> = ({
             onPipelineSelect={handlePipelineSelect}
             onClose={onClose || (() => {})}
             resultsContainerRef={resultsRef}
+            onAliasManager={handleOpenAliasManager}
           />
-        ) : (
-          activeCommand && (
-            <CommandMode
-              command={activeCommand}
-              onBack={handleBackToMain}
-              onExecute={executeCommand}
-              inputValue={commandSubInput}
-              onInputChange={handleCommandSubInputChange}
-              pipelineSuggestions={pipelineSuggestions}
-              resultsContainerRef={resultsRef}
-            />
-          )
+        )}
+
+        {viewMode === "command" && activeCommand && (
+          <CommandMode
+            command={activeCommand}
+            onBack={handleBackToMain}
+            onExecute={executeCommand}
+            inputValue={commandSubInput}
+            onInputChange={handleCommandSubInputChange}
+            pipelineSuggestions={pipelineSuggestions}
+            resultsContainerRef={resultsRef}
+          />
+        )}
+
+        {viewMode === "alias-manager" && (
+          <CommandAliasManager onClose={handleCloseAliasManager} />
         )}
       </div>
     </div>
