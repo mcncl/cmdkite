@@ -1,17 +1,22 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, RefObject } from "react";
 import { Command, Pipeline, PipelineSuggestion } from "../../types";
 import { CommandInput } from "../CommandInput";
 import { PipelineResults } from "../PipelineResults";
 import { useKeyboardNavigation } from "../../hooks";
 
-interface CommandModeProps {
+export interface CommandModeProps {
   command: Command;
-  onBack: () => void;
-  onExecute: (command: Command, input: string) => void;
-  inputValue: string;
+  input: string;
   onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  isSearching?: boolean;
   pipelineSuggestions: PipelineSuggestion[];
-  resultsContainerRef?: React.RefObject<HTMLDivElement>;
+  selectedIndex: number;
+  onIndexChange: (index: number) => void;
+  onPipelineSelect: (pipeline: Pipeline) => void;
+  onExecute: (input: string) => void;
+  onBack: () => void;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
+  inputRef?: RefObject<HTMLInputElement>;
 }
 
 /**

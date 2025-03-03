@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { userPreferencesService } from "../services/preferences";
 import { pipelineService } from "../services/pipelineService";
 import { Pipeline } from "../types";
-import { PipelineItem } from "./pipelineItem";
+import { PipelineItem } from "./PipelineItem";
 
 interface FavoritePipelinesSectionProps {
   selectedIndex: number;

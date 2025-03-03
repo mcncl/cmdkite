@@ -5,6 +5,7 @@ export interface Command {
   keywords: string[];
   execute: (input?: string) => void;
   isAvailable?: () => boolean;
+  hasSubInput?: boolean;
 }
 
 export interface CommandMatch {

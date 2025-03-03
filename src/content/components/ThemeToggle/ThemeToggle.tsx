@@ -5,6 +5,7 @@ import { Theme } from "../../services/themeService";
 interface ThemeToggleProps {
   className?: string;
   showLabel?: boolean;
+  size?: "small" | "medium" | "large"; // Added size prop
 }
 
 /**
@@ -13,6 +14,7 @@ interface ThemeToggleProps {
 export const ThemeToggle: React.FC<ThemeToggleProps> = ({
   className = "",
   showLabel = false,
+  size = "medium",
 }) => {
   const { theme, themeMode, setTheme } = useTheme();
 
@@ -21,6 +23,21 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
     setTheme(newTheme);
   };
 
+  // Determine icon size based on size prop
+  const getIconSize = (): number => {
+    switch (size) {
+      case "small":
+        return 14;
+      case "large":
+        return 20;
+      case "medium":
+      default:
+        return 16;
+    }
+  };
+
+  const iconSize = getIconSize();
+
   // Render appropriate icon based on current theme
   const renderThemeIcon = () => {
     switch (themeMode) {
@@ -28,8 +45,8 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         return (
           <svg
             className="cmd-k-theme-icon"
-            width="16"
-            height="16"
+            width={iconSize}
+            height={iconSize}
             viewBox="0 0 24 24"
             stroke="currentColor"
             fill="none"
@@ -52,8 +69,8 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         return (
           <svg
             className="cmd-k-theme-icon"
-            width="16"
-            height="16"
+            width={iconSize}
+            height={iconSize}
             viewBox="0 0 24 24"
             stroke="currentColor"
             fill="none"
@@ -68,8 +85,8 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
         return (
           <svg
             className="cmd-k-theme-icon"
-            width="16"
-            height="16"
+            width={iconSize}
+            height={iconSize}
             viewBox="0 0 24 24"
             stroke="currentColor"
             fill="none"
@@ -86,8 +103,11 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
     }
   };
 
+  // Apply size-specific class
+  const sizeClass = `cmd-k-theme-toggle-${size}`;
+
   return (
-    <div className={`cmd-k-theme-toggle ${className}`}>
+    <div className={`cmd-k-theme-toggle ${sizeClass} ${className}`}>
       <select
         className="cmd-k-theme-select"
         value={theme}

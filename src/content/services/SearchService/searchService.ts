@@ -1,10 +1,15 @@
-import { Command, CommandMatch, Pipeline, PipelineSuggestion } from "../types";
-import { fuzzyMatch, enhancedFuzzySearch } from "../util/search";
-import { userPreferencesService, CommandAlias } from "../services/preferences";
-import { pipelineService } from "./pipelineService";
-import { CommandManager } from "./commandManager";
-import { PrefixTrie } from "../util/trie";
-import { errorService, ErrorCategory, ErrorSeverity } from "./errorService";
+import {
+  Command,
+  CommandMatch,
+  Pipeline,
+  PipelineSuggestion,
+} from "../../types";
+import { fuzzyMatch, enhancedFuzzySearch } from "../../util/search";
+import { userPreferencesService, CommandAlias } from "../preferences";
+import { pipelineService } from "../pipelineService";
+import { CommandManager } from "../commandManager";
+import { PrefixTrie } from "./trie";
+import { errorService, ErrorCategory, ErrorSeverity } from "../errorService";
 
 /**
  * Maximum number of recent searches to store

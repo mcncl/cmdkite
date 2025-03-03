@@ -184,11 +184,14 @@ export function VirtualizedList<T>({
 
     // Get position of selected item
     const itemTop = itemPositions[selectedIndex];
-    const itemHeight =
+
+    // Calculate the height of the selected item
+    const selectedItemHeight =
       typeof itemHeight === "function"
         ? itemHeight(items[selectedIndex], selectedIndex)
         : itemHeight;
-    const itemBottom = itemTop + itemHeight;
+
+    const itemBottom = itemTop + selectedItemHeight;
 
     // Check if item is already visible
     const isVisible =
@@ -199,7 +202,8 @@ export function VirtualizedList<T>({
 
       // Center the item in the viewport if requested
       if (scrollToSelectedBehavior === "center") {
-        targetScrollTop = itemTop - container.clientHeight / 2 + itemHeight / 2;
+        targetScrollTop =
+          itemTop - container.clientHeight / 2 + selectedItemHeight / 2;
       } else {
         // Otherwise scroll just enough to make it visible
         if (itemTop < scrollTop) {
@@ -240,6 +244,7 @@ export function VirtualizedList<T>({
     itemPositions,
     scrollTop,
     scrollToSelectedBehavior,
+    itemHeight,
   ]);
 
   return (

@@ -8,6 +8,7 @@ import {
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  fallbackMessage?: string; // Added this prop for custom error messages
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
   errorCategory?: ErrorCategory;
 }
@@ -59,13 +60,16 @@ export class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      // Get custom message if provided
+      const errorMessage = this.props.fallbackMessage || "Something went wrong";
+
       // Default fallback UI
       return (
         <div className="cmd-k-error-boundary">
           <div className="cmd-k-error-message">
             <div className="cmd-k-error-icon">⚠️</div>
             <div className="cmd-k-error-content">
-              <h4>Something went wrong</h4>
+              <h4>{errorMessage}</h4>
               <p>The component could not be rendered properly.</p>
               <button
                 onClick={() => this.setState({ hasError: false, error: null })}

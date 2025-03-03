@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, RefObject } from "react";
 import {
   Command,
   Pipeline,
@@ -12,16 +12,29 @@ import { RecentCommandsSection } from "../RecentCommandsSection";
 import { FavoriteCommandsSection } from "../FavouriteCommandsSection";
 import { useKeyboardNavigation } from "../../hooks";
 
-interface MainModeProps {
+export interface MainModeProps {
+  // Input
+  input: string;
+  onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onInputChangeImmediate?: (value: string) => void;
+  isSearching?: boolean;
+  inputRef?: RefObject<HTMLInputElement>;
+
+  // Data
   commandMatches: CommandMatch[];
   pipelineSuggestions: PipelineSuggestion[];
-  inputValue: string;
-  onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onCommandSelect: (command: Command, params?: string) => void;
+
+  // Selection
+  selectedIndex: number;
+  selectedSection: "commands" | "pipelines";
+  onIndexChange: (index: number) => void;
+  onSectionChange: (section: "commands" | "pipelines") => void;
+
+  // Actions
+  onCommandSelect: (command: Command) => void;
   onPipelineSelect: (pipeline: Pipeline) => void;
-  onClose: () => void;
-  resultsContainerRef?: React.RefObject<HTMLDivElement>;
-  onAliasManager?: () => void; // New prop for opening the alias manager
+  onOpenAliasManager?: () => void;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
 }
 
 /**
