@@ -319,22 +319,51 @@ export class SearchService {
    * Uses caching and prefix trie for optimization
    *
    * @param query User input to match against commands and aliases
+   * @param limit Maximum number of results to return (optional)
    * @returns Array of command matches with scores
    */
-  public async searchCommands(query: string): Promise<CommandMatch[]> {
+  public async searchCommands(query: string, limit?: number): Promise<CommandMatch[]> {
     await this.ensureInitialized();
 
-    // If query is empty, return all available commands
+    // If query is empty, return limited available commands
     if (!query.trim()) {
-      return this.commandManager.getAllAvailableCommands().map((cmd) => ({
+      const allCommands = this.commandManager.getAllAvailableCommands().map((cmd) => ({
         command: cmd,
         score: 1,
       }));
+      
+      return limit ? allCommands.slice(0, limit) : allCommands;
     }
 
-    // Check cache first
+    // Check cache first - this is critical for performance
     if (this.isCommandCacheValid(query)) {
       return [...this.commandSearchCache!.results];
+    }
+
+    // Special handling for very short queries (1 character)
+    // Return a small, fixed set to prevent UI freezing
+    if (query.trim().length === 1) {
+      // Get just the top commands that start with this character
+      const inputChar = query.trim().toLowerCase()[0];
+      const quickResults: CommandMatch[] = [];
+      
+      // Get at most 10 commands that start with this character
+      const availableCommands = this.commandManager.getAllAvailableCommands();
+      for (const cmd of availableCommands) {
+        if (cmd.id.toLowerCase().startsWith(inputChar)) {
+          quickResults.push({ command: cmd, score: 80 });
+          if (quickResults.length >= 10) break;
+        }
+      }
+      
+      // Cache these results
+      this.commandSearchCache = {
+        query,
+        results: [...quickResults],
+        timestamp: Date.now(),
+      };
+      
+      return quickResults;
     }
 
     // Ensure trie is initialized
@@ -416,13 +445,33 @@ export class SearchService {
       // Get matches from trie
       const matches = this.commandTrie.search(inputLower);
 
-      // Convert to command matches
+      // Convert to command matches - limit processing for very short queries
       for (const command of matches) {
         // Only include available commands
         if (!command.isAvailable || command.isAvailable()) {
-          const score = this.calculateCommandMatchScore(inputLower, command);
+          // For 2-3 char queries, use a simplified scoring to improve performance
+          let score = 0;
+          if (inputLower.length <= 2) {
+            // Use simplified scoring for very short queries
+            if (command.id.toLowerCase().startsWith(inputLower)) {
+              score = 80;
+            } else if (command.name.toLowerCase().startsWith(inputLower)) {
+              score = 70;
+            } else {
+              score = 60; // Any match gets a minimum score
+            }
+          } else {
+            // Use full scoring for 3-char queries
+            score = this.calculateCommandMatchScore(inputLower, command);
+          }
+          
           if (score > 0) {
             results.push({ command, score });
+            
+            // Limit to 20 results for very short queries to improve performance
+            if (inputLower.length <= 2 && results.length >= 20) {
+              break;
+            }
           }
         }
       }
@@ -447,83 +496,88 @@ export class SearchService {
       inputParams: string;
     };
 
-    // Score and filter aliases
-    const aliasMatches = this.commandAliases
-      .filter((alias) => {
-        // Only include aliases for commands that exist and are available
-        const cmd = this.commandManager.getCommandById(alias.commandId);
-        return cmd && (!cmd.isAvailable || cmd.isAvailable());
-      })
-      .map((alias) => {
-        // Get the actual command this alias refers to
-        const command = this.commandManager.getCommandById(alias.commandId);
-        if (!command) return null;
-
-        // Calculate match score for the alias
-        let score = 0;
-
-        // Direct alias name match (highest priority)
-        if (alias.name.toLowerCase() === inputLower) {
-          score = 95; // Just below exact command match
-        }
-        // Alias starts with input
-        else if (alias.name.toLowerCase().startsWith(inputLower)) {
-          score = 85;
-        }
-        // Alias contains input
-        else if (alias.name.toLowerCase().includes(inputLower)) {
-          score = 75;
-        }
-        // Check custom description if available
-        else if (
-          alias.description &&
-          alias.description.toLowerCase().includes(inputLower)
-        ) {
-          score = 65;
-        }
-
-        return score > 0
-          ? {
-              command,
-              score,
-              alias,
-              // Add any default params defined for this alias
-              inputParams: alias.params || "",
-            }
-          : null;
-      })
-      .filter((match): match is AliasCommandMatch => match !== null);
+    // Skip alias matching for very short queries to improve performance
+    let aliasMatches: AliasCommandMatch[] = [];
+    if (inputLower.length > 2) {
+      // Score and filter aliases
+      aliasMatches = this.commandAliases
+        .filter((alias) => {
+          // Only include aliases for commands that exist and are available
+          const cmd = this.commandManager.getCommandById(alias.commandId);
+          return cmd && (!cmd.isAvailable || cmd.isAvailable());
+        })
+        .map((alias) => {
+          // Get the actual command this alias refers to
+          const command = this.commandManager.getCommandById(alias.commandId);
+          if (!command) return null;
+  
+          // Calculate match score for the alias
+          let score = 0;
+  
+          // Direct alias name match (highest priority)
+          if (alias.name.toLowerCase() === inputLower) {
+            score = 95; // Just below exact command match
+          }
+          // Alias starts with input
+          else if (alias.name.toLowerCase().startsWith(inputLower)) {
+            score = 85;
+          }
+          // Alias contains input
+          else if (alias.name.toLowerCase().includes(inputLower)) {
+            score = 75;
+          }
+          // Check custom description if available
+          else if (
+            alias.description &&
+            alias.description.toLowerCase().includes(inputLower)
+          ) {
+            score = 65;
+          }
+  
+          return score > 0
+            ? {
+                command,
+                score,
+                alias,
+                // Add any default params defined for this alias
+                inputParams: alias.params || "",
+              }
+            : null;
+        })
+        .filter((match): match is AliasCommandMatch => match !== null);
+    }
 
     // Combine matches and sort by score
     results = [...results, ...aliasMatches].sort((a, b) => b.score - a.score);
 
-    // Update cache
+    // Update cache with full results
     this.commandSearchCache = {
       query,
       results: [...results], // Create a copy to prevent cache mutation
       timestamp: Date.now(),
     };
 
-    return results;
+    // Return limited results if limit is specified
+    return limit ? results.slice(0, limit) : results;
   }
 
   /**
-   * Calculate a match score between the input and a command
+   * Calculate a match score between the input and a command - optimized version
+   * This version is more performance-focused and avoids excessive string operations
    *
    * @param input The search input
    * @param command The command to score against
    * @returns Score indicating match quality
    */
   private calculateCommandMatchScore(input: string, command: Command): number {
-    const words = input.split(/\s+/);
-    const firstWord = words[0];
-    let score = 0;
-
+    // Skip processing for empty input
+    if (!input) return 0;
+    
+    // Cache these values to avoid repeated toLowerCase() calls
     const commandIdLower = command.id.toLowerCase();
     const commandNameLower = command.name.toLowerCase();
-    const descriptionLower = command.description.toLowerCase();
-
-    // Direct matches are highest priority
+    
+    // Direct matches are highest priority - fast path
     if (commandIdLower === input) {
       return 100;
     }
@@ -531,8 +585,10 @@ export class SearchService {
     if (commandNameLower === input) {
       return 90;
     }
+    
+    let score = 0;
 
-    // Command ID partial matches
+    // Command ID partial matches (highest priority after exact)
     if (commandIdLower.startsWith(input)) {
       score += 70;
     } else if (commandIdLower.includes(input)) {
@@ -545,50 +601,58 @@ export class SearchService {
     } else if (commandNameLower.includes(input)) {
       score += 40;
     }
-
-    // First word exact matches (important for command discovery)
-    if (
-      commandIdLower.startsWith(firstWord) ||
-      commandNameLower.startsWith(firstWord)
-    ) {
-      score += 30;
+    
+    // Early return for high-scoring matches to avoid unnecessary processing
+    if (score >= 60) {
+      return score;
     }
-
-    // Multi-word matching (each word that matches adds points)
-    let wordMatchCount = 0;
-    for (const word of words) {
-      if (word.length < 2) continue; // Skip very short words
-
+    
+    // Skip more complex processing for short queries to improve performance
+    if (input.length < 3) {
+      return score;
+    }
+    
+    // For multi-word search, split and process each word
+    const words = input.split(/\s+/);
+    if (words.length > 1) {
+      const firstWord = words[0];
+      
+      // First word exact matches (important for command discovery)
       if (
-        commandIdLower.includes(word) ||
-        commandNameLower.includes(word) ||
-        descriptionLower.includes(word)
+        commandIdLower.startsWith(firstWord) ||
+        commandNameLower.startsWith(firstWord)
       ) {
-        wordMatchCount++;
+        score += 30;
       }
-
-      // Check keywords too
-      if (command.keywords.some((k) => k.toLowerCase().includes(word))) {
-        wordMatchCount++;
+      
+      // Multi-word matching - simplified to save processing time
+      const validWords = words.filter(word => word.length >= 2);
+      const wordMatchCount = validWords.filter(word => 
+        commandIdLower.includes(word) || 
+        commandNameLower.includes(word) ||
+        command.description.toLowerCase().includes(word) ||
+        command.keywords.some(k => k.toLowerCase().includes(word))
+      ).length;
+      
+      // Add points for word matches
+      score += wordMatchCount * 10;
+    } else {
+      // Only do keyword and description checks for single word searches
+      
+      // Keyword exact/partial matches
+      const keywordMatch = command.keywords.find(k => {
+        const kLower = k.toLowerCase();
+        return kLower === input || kLower.includes(input);
+      });
+      
+      if (keywordMatch) {
+        score += keywordMatch.toLowerCase() === input ? 30 : 20;
       }
-    }
-
-    // Add points for word matches
-    score += wordMatchCount * 10;
-
-    // Keyword exact matches
-    if (command.keywords.some((k) => k.toLowerCase() === input)) {
-      score += 30;
-    }
-
-    // Keyword partial matches
-    if (command.keywords.some((k) => k.toLowerCase().includes(input))) {
-      score += 20;
-    }
-
-    // Description matches (lowest priority)
-    if (descriptionLower.includes(input)) {
-      score += 10;
+      
+      // Description matches (lowest priority)
+      if (command.description.toLowerCase().includes(input)) {
+        score += 10;
+      }
     }
 
     return score;

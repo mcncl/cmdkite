@@ -60,18 +60,30 @@ function cleanup(): void {
 
 const CommandBoxContainer: React.FC = () => {
   const [isVisible, setIsVisible] = React.useState(false);
+  console.log("CMDKite: CommandBoxContainer rendered, isVisible:", isVisible);
 
   // Expose toggle function to window
   React.useEffect(() => {
+    // Define toggle function with logging
     window.toggleCommandBox = () => {
-      setIsVisible((prev) => !prev);
+      console.log("CMDKite: Toggle function called, current state:", isVisible);
+      setIsVisible((prev) => {
+        const newState = !prev;
+        console.log("CMDKite: Setting visibility to:", newState);
+        return newState;
+      });
     };
+
+    console.log("CMDKite: Toggle function registered on window object");
 
     // Cleanup when component unmounts
     return () => {
+      console.log("CMDKite: Cleaning up toggle function");
       delete window.toggleCommandBox;
     };
-  }, []);
+  }, [isVisible]); // Added isVisible to the dependency array
+
+  console.log("CMDKite: Rendering CommandBox with isVisible:", isVisible);
 
   return (
     <ErrorProvider>
@@ -101,7 +113,10 @@ const CommandBoxContainer: React.FC = () => {
         >
           <CommandBox
             isVisible={isVisible}
-            onClose={() => setIsVisible(false)}
+            onClose={() => {
+              console.log("CMDKite: onClose called, setting isVisible to false");
+              setIsVisible(false);
+            }}
           />
         </ErrorBoundary>
       </ThemeProvider>
@@ -178,10 +193,8 @@ function initializeCommandBox(): void {
       endTiming(PerformanceOperation.UI_INTERACTION, 200);
       console.log("CMDKite initialized successfully");
 
-      // Import debugger
-      import("./debug").catch((err) =>
-        console.warn("Could not load debugger:", err),
-      );
+      // Don't load external debugger - it's causing CSP issues
+      console.log("CMDKite: Debug mode disabled");
     } catch (renderError) {
       errorService.captureException(renderError, {
         message: "React render failed",
@@ -281,26 +294,36 @@ chrome.runtime.onMessage.addListener(
     sendResponse: (response: { success: boolean; error?: string }) => void,
   ) => {
     try {
-      if (request.action === "toggle_command_box" && !isProcessingMessage) {
+      console.log("CMDKite: Received message:", request);
+      
+      if (request.action === "toggle_command_box") {
+        console.log("CMDKite: Toggling command box, current processing state:", isProcessingMessage);
+        
+        // Mark as processing but don't block if already processing
+        const wasProcessing = isProcessingMessage;
         isProcessingMessage = true;
 
-        // Ensure we have a working instance
-        if (!window.cmdkiteInitialized) {
+        // Always ensure we have a working instance
+        if (!window.cmdkiteInitialized || !window.toggleCommandBox) {
+          console.log("CMDKite: Reinitializing command box");
           initializeCommandBox();
 
-          // Small delay to ensure the toggleCommandBox function is registered
+          // Longer delay to ensure the toggleCommandBox function is registered
           setTimeout(() => {
+            console.log("CMDKite: After init, toggle function exists:", !!window.toggleCommandBox);
             if (window.toggleCommandBox) {
+              console.log("CMDKite: Calling toggle function after init");
               window.toggleCommandBox();
+            } else {
+              console.error("CMDKite: Toggle function still not available after initialization");
             }
-            sendResponse({ success: true });
+            sendResponse({ success: !!window.toggleCommandBox });
             isProcessingMessage = false;
-          }, 100);
+          }, 200);
         } else {
           // Toggle immediately if already initialized
-          if (window.toggleCommandBox) {
-            window.toggleCommandBox();
-          }
+          console.log("CMDKite: Already initialized, calling toggle function directly");
+          window.toggleCommandBox();
           sendResponse({ success: true });
 
           // Reset the processing flag after a short delay
@@ -309,12 +332,14 @@ chrome.runtime.onMessage.addListener(
           }, 100);
         }
       } else {
+        console.log("CMDKite: Unknown action:", request.action);
         sendResponse({
           success: false,
           error: "Action not recognized or message is already being processed",
         });
       }
     } catch (error) {
+      console.error("CMDKite: Error handling message:", error);
       errorService.captureException(error, {
         message: "Error handling message",
         severity: ErrorSeverity.ERROR,

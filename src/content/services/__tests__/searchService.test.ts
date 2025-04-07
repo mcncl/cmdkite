@@ -1,5 +1,3 @@
-// src/content/services/__tests__/searchService.test.ts
-
 // Mock Chrome API
 const mockChromeStorage = {
   sync: {

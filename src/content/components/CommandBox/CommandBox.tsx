@@ -1,4 +1,3 @@
-// src/content/components/CommandBox/CommandBox.tsx
 import React, { useState, useEffect, useCallback, useRef, memo } from "react";
 import { SearchService } from "../../services/SearchService/searchService";
 import { userPreferencesService } from "../../services/preferences";
@@ -52,7 +51,11 @@ export const CommandBox: React.FC<CommandBoxProps> = memo(
     const subInputRef = useRef<HTMLInputElement>(null);
     const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Reset state when closing
+    // Import performance monitoring utilities
+    const { enablePerformanceMonitoring, logPerformanceMetrics } = 
+      require('../../util/performanceMonitor');
+      
+    // Reset state when closing and enable performance monitoring when opening
     useEffect(() => {
       if (!isVisible) {
         setInput("");
@@ -63,7 +66,17 @@ export const CommandBox: React.FC<CommandBoxProps> = memo(
         setCommandSubInput("");
         setIsSearching(false);
         setSelectedIndex(0);
+        
+        // Log and reset performance metrics when closing
+        if (process.env.NODE_ENV === 'development') {
+          logPerformanceMetrics();
+        }
       } else {
+        // Enable performance monitoring when opening
+        if (process.env.NODE_ENV === 'development') {
+          enablePerformanceMonitoring(true);
+        }
+        
         // Focus input when opening
         setTimeout(() => {
           if (viewMode === "main" && inputRef.current) {
@@ -220,44 +233,101 @@ export const CommandBox: React.FC<CommandBoxProps> = memo(
       if (!input.trim()) {
         setPipelineSuggestions([]);
 
-        // Use async function to search commands
-        const fetchCommands = async () => {
+        // Use progressive loading for commands on initial load
+        // First load just a small set immediately for better perceived performance
+        const fetchInitialCommands = async () => {
           try {
-            const matches = await searchService.searchCommands("");
-            setCommandMatches(matches);
+            // Fast initial load with limited commands
+            const initialMatches = await searchService.searchCommands("", 10);
+            setCommandMatches(initialMatches);
+            
+            // Then load more commands after a short delay
+            setTimeout(async () => {
+              try {
+                const allMatches = await searchService.searchCommands("", 30);
+                setCommandMatches(allMatches);
+              } catch (error) {
+                // Initial load worked, so no need to show another error
+                console.error("Failed to load additional commands", error);
+              }
+            }, 100);
           } catch (error) {
             handleError(error, "Failed to search commands");
             setCommandMatches([]);
           }
         };
 
-        fetchCommands();
+        fetchInitialCommands();
+        return;
+      }
+      
+      // Skip searching for very short inputs (1 character) until typing pauses
+      // This prevents the performance issues when deleting down to 1 character
+      if (input.trim().length === 1) {
+        // Set that we're searching
+        setIsSearching(true);
+        
+        // Use a longer debounce for single character to prevent freezing
+        searchDebounceRef.current = setTimeout(async () => {
+          try {
+            const commandResults = await searchService.searchCommands(input, 15);
+            setCommandMatches(commandResults);
+            // Don't load pipelines for single character inputs
+            setPipelineSuggestions([]);
+          } catch (error) {
+            handleError(error, "Failed to search");
+            setCommandMatches([]);
+          } finally {
+            setIsSearching(false);
+            searchDebounceRef.current = null;
+          }
+        }, 600); // Longer delay for single character searches
+        
         return;
       }
 
-      // Set that we're searching
+      // Set that we're searching for multi-character inputs
       setIsSearching(true);
 
+      // Use adaptive debouncing - shorter for longer queries, longer for shorter queries
+      const debounceTime = input.length <= 2 ? 500 : 300;
+      
       // Debounce search operations
       searchDebounceRef.current = setTimeout(async () => {
         try {
-          // Run searches in parallel for better performance
-          const [commandResults, pipelineResults] = await Promise.all([
-            searchService.searchCommands(input),
-            searchPipelines(input, 7),
-          ]);
-
+          // First fetch commands before pipelines to improve perceived performance
+          const commandResults = await searchService.searchCommands(input, 25); // Limit to 25 results
           setCommandMatches(commandResults);
-          setPipelineSuggestions(pipelineResults);
+          
+          // For short queries (2 chars), don't load pipelines to improve performance
+          if (input.trim().length <= 2) {
+            setPipelineSuggestions([]);
+            setIsSearching(false);
+            searchDebounceRef.current = null;
+            return;
+          }
+          
+          // Then load pipelines in a separate microtask for longer queries
+          setTimeout(async () => {
+            try {
+              const pipelineResults = await searchPipelines(input, 5); // Reduced from 7 to 5
+              setPipelineSuggestions(pipelineResults);
+            } catch (error) {
+              handleError(error, "Failed to search pipelines");
+              setPipelineSuggestions([]);
+            } finally {
+              setIsSearching(false);
+            }
+          }, 0);
         } catch (error) {
           handleError(error, "Failed to search");
           setCommandMatches([]);
           setPipelineSuggestions([]);
-        } finally {
           setIsSearching(false);
+        } finally {
           searchDebounceRef.current = null;
         }
-      }, 200); // 200ms debounce
+      }, debounceTime);
 
       // Cleanup function
       return () => {
@@ -318,7 +388,7 @@ export const CommandBox: React.FC<CommandBoxProps> = memo(
           activeCommand.id === "new-build"
         ) {
           try {
-            const matches = await searchPipelines(commandSubInput, 7);
+            const matches = await searchPipelines(commandSubInput, 5); // Reduced from 7 to 5
             setPipelineSuggestions(matches);
           } catch (error) {
             handleError(error, "Failed to search pipelines");
@@ -331,7 +401,7 @@ export const CommandBox: React.FC<CommandBoxProps> = memo(
           setIsSearching(false);
           searchDebounceRef.current = null;
         }
-      }, 200); // 200ms debounce
+      }, 400); // Increased from 200ms to 400ms
 
       // Cleanup function
       return () => {

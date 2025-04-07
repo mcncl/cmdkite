@@ -8,6 +8,10 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'",
+    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://buildkiteassets.com; object-src 'self'"
+  },
   "commands": {
     "toggle-feature": {
       "suggested_key": {

@@ -69,8 +69,19 @@ export class PrefixTrie<T = any> {
   public search(prefix: string): T[] {
     const normalizedPrefix = prefix.toLowerCase();
 
+    // Handle empty prefix case - return empty array
     if (!normalizedPrefix) {
       return [];
+    }
+    
+    // Special case for single character searches to prevent performance issues
+    if (normalizedPrefix.length === 1) {
+      // For single character, limit to exact matches only, don't traverse the trie
+      const firstCharNode = this.root.children.get(normalizedPrefix[0]);
+      if (!firstCharNode) return [];
+      
+      // Only return values that are direct matches
+      return firstCharNode.isEndOfWord ? [...firstCharNode.values] : [];
     }
 
     // Find the node corresponding to the prefix
@@ -96,36 +107,43 @@ export class PrefixTrie<T = any> {
    */
   private collectValues(node: TrieNode<T>): T[] {
     const result: T[] = [];
-    const visited = new Set<T>();
-
-    // Use a breadth-first search to collect values
-    const queue: TrieNode<T>[] = [node];
-
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-
-      // Add the values at this node if it's an end of word
+    const visited = new Set<T | string>();
+    
+    // Use depth-first search with depth limit for better performance
+    const MAX_DEPTH = 5; // Limit depth to prevent excessive traversal
+    const MAX_RESULTS = 30; // Lower maximum to improve performance
+    
+    const dfs = (current: TrieNode<T>, depth: number) => {
+      // Check termination conditions
+      if (depth > MAX_DEPTH || result.length >= MAX_RESULTS) {
+        return;
+      }
+      
+      // Process current node
       if (current.isEndOfWord) {
         for (const value of current.values) {
-          // Skip duplicates (especially important for commands)
+          // Skip duplicates
           if (!this.isVisited(value, visited)) {
             result.push(value);
             this.markVisited(value, visited);
+            
+            // Early termination if we have enough results
+            if (result.length >= MAX_RESULTS) {
+              return;
+            }
           }
         }
       }
-
-      // Add all children to the queue
+      
+      // Process direct children first (prioritize exact matches)
       for (const child of current.children.values()) {
-        queue.push(child);
+        dfs(child, depth + 1);
       }
-
-      // Limit search to a reasonable number of results
-      if (result.length >= 50) {
-        break;
-      }
-    }
-
+    };
+    
+    // Start DFS from the provided node
+    dfs(node, 0);
+    
     return result;
   }
 
